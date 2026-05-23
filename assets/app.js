@@ -1,5 +1,25 @@
 "use strict";
 
+// ===== SEEDED RANDOM (mulberry32) =====
+// Reproducible Monte-Carlo via deterministischen PRNG. Bei `seed = null` wird Math.random genutzt.
+let rngSeed = null;
+function setRngSeed(seed) {
+  rngSeed = (typeof seed === 'number') ? (seed >>> 0) : null;
+  if (rngSeed === null) _rng = Math.random;
+  else _rng = mulberry32(rngSeed);
+}
+function mulberry32(a) {
+  return function() {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let _rng = Math.random;
+function rand() { return _rng(); }
+
 // ===== STAMMDATEN: WM 2026 GRUPPEN (Final Draw Dezember 2025) =====
 // Team-Werte sind Keys aus TEAM_LABELS (i18n.js)
 const GROUPS = {
@@ -104,26 +124,83 @@ function outcomesFromLambdas(lh, la) {
   }
   return [pH, pD, pA];
 }
+// Numerischer Gradient für die Quadratisch-Fehler-Funktion
+function _gradErr(lh, la, pH, pD, pA) {
+  const eps = 1e-4;
+  const f = (lh, la) => {
+    const [h, d, a] = outcomesFromLambdas(lh, la);
+    return (h-pH)**2 + (d-pD)**2 + (a-pA)**2;
+  };
+  const e0 = f(lh, la);
+  const dh = (f(lh + eps, la) - e0) / eps;
+  const dla = (f(lh, la + eps) - e0) / eps;
+  return [dh, dla, e0];
+}
+
+// Schnellere Lambda-Suche: grobe Initialisierung + Gradient Descent (Approximation Newton-Raphson)
+// Output: [λ_home, λ_away]
 function findLambdas(pH, pD, pA) {
+  // 1) Grobe Initialisierung über kleinere Grid (15x15 statt 30x30)
   let best = { lh: 1.3, la: 1.3, err: Infinity };
-  for (let lh = 0.15; lh <= 4.5; lh += 0.15) {
-    for (let la = 0.15; la <= 4.5; la += 0.15) {
+  for (let lh = 0.2; lh <= 4.0; lh += 0.3) {
+    for (let la = 0.2; la <= 4.0; la += 0.3) {
       const [h, d, a] = outcomesFromLambdas(lh, la);
       const err = (h-pH)**2 + (d-pD)**2 + (a-pA)**2;
       if (err < best.err) best = { lh, la, err };
     }
   }
-  const step = 0.01;
-  const lo_h = Math.max(0.05, best.lh - 0.2), hi_h = best.lh + 0.2;
-  const lo_a = Math.max(0.05, best.la - 0.2), hi_a = best.la + 0.2;
-  for (let lh = lo_h; lh <= hi_h; lh += step) {
-    for (let la = lo_a; la <= hi_a; la += step) {
-      const [h, d, a] = outcomesFromLambdas(lh, la);
-      const err = (h-pH)**2 + (d-pD)**2 + (a-pA)**2;
-      if (err < best.err) best = { lh, la, err };
+  // 2) Gradient Descent mit adaptiver Schrittweite (Backtracking-Line-Search-light)
+  let lh = best.lh, la = best.la, err = best.err;
+  let step = 0.2;
+  for (let iter = 0; iter < 40; iter++) {
+    const [dh, dla, e0] = _gradErr(lh, la, pH, pD, pA);
+    const norm = Math.sqrt(dh*dh + dla*dla);
+    if (norm < 1e-7 || e0 < 1e-9) break;
+    // Schritt
+    let nlh = Math.max(0.05, lh - step * dh / norm);
+    let nla = Math.max(0.05, la - step * dla / norm);
+    const [h2, d2, a2] = outcomesFromLambdas(nlh, nla);
+    const e1 = (h2-pH)**2 + (d2-pD)**2 + (a2-pA)**2;
+    if (e1 < e0) { lh = nlh; la = nla; err = e1; }
+    else { step *= 0.5; } // shrink step
+    if (step < 1e-5) break;
+  }
+  return [lh, la];
+}
+
+// ===== DIXON-COLES KORREKTUR =====
+// Dixon & Coles (1997): "Modelling Association Football Scores and Inefficiencies in the
+// Football Betting Market". Standard-Korrektur für niedrige Scores (0:0, 1:0, 0:1, 1:1)
+// wo unabhängige Poisson-Verteilungen systematisch unter- bzw. überschätzen.
+// ρ ist ein freier Parameter (üblich ρ ≈ -0.1 für moderne Daten, leicht negativ).
+function dixonColesTau(h, a, lh, la, rho) {
+  if (h === 0 && a === 0) return 1 - lh * la * rho;
+  if (h === 0 && a === 1) return 1 + lh * rho;
+  if (h === 1 && a === 0) return 1 + la * rho;
+  if (h === 1 && a === 1) return 1 - rho;
+  return 1;
+}
+// Korrigiere die Score-Matrix in-place
+function applyDixonColes(matrix, lh, la, rho) {
+  if (!rho) return matrix;
+  for (let i = 0; i < Math.min(2, matrix.length); i++) {
+    for (let j = 0; j < Math.min(2, matrix[i].length); j++) {
+      matrix[i][j] *= dixonColesTau(i, j, lh, la, rho);
     }
   }
-  return [best.lh, best.la];
+  // Re-normalisieren damit Σ = 1
+  let sum = 0;
+  for (let i = 0; i < matrix.length; i++) for (let j = 0; j < matrix[i].length; j++) sum += matrix[i][j];
+  if (sum > 0) {
+    for (let i = 0; i < matrix.length; i++) for (let j = 0; j < matrix[i].length; j++) matrix[i][j] /= sum;
+  }
+  return matrix;
+}
+function getDixonColesRho() {
+  const el = document.getElementById('dixonColesRho');
+  if (!el) return -0.1; // Default aus Literatur
+  const v = parseFloat(el.value);
+  return isFinite(v) ? v : -0.1;
 }
 function oddsToProbs(oH, oD, oA) {
   if (!oH || !oD || !oA || oH <= 1 || oD <= 1 || oA <= 1) return null;
@@ -206,7 +283,10 @@ function computeMatch(m, settings) {
   const active = getActiveProbs(m);
   if (!active.probs) return null;
   const [lh, la] = findLambdas(active.probs.pH, active.probs.pD, active.probs.pA);
-  const matrix = scoreMatrix(lh, la, settings.maxGoals);
+  let matrix = scoreMatrix(lh, la, settings.maxGoals);
+  // Dixon-Coles low-score correction (default rho ≈ -0.1 aus Literatur)
+  const rho = getDixonColesRho();
+  if (rho !== 0) matrix = applyDixonColes(matrix, lh, la, rho);
   const rules = { exact: settings.exact, diff: settings.diff, tend: settings.tend };
   const tip = bestKicktippTip(matrix, rules, settings.maxGoals);
   const top = topScores(matrix, 10);
@@ -993,7 +1073,7 @@ function clearGroupSimCache() { groupSimCache = {}; }
 
 // Sample (i,j) aus einer Score-Matrix gegen uniform random
 function sampleScore(matrix) {
-  const r = Math.random();
+  const r = rand();
   let cum = 0;
   for (let i = 0; i < matrix.length; i++) {
     for (let j = 0; j < matrix[i].length; j++) {
@@ -1029,10 +1109,10 @@ function simulateGroupWinners(g, settings, nSims = 10000) {
 
   for (let sim = 0; sim < nSims; sim++) {
     const st = [
-      { idx: 0, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
-      { idx: 1, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
-      { idx: 2, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
-      { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() }
+      { idx: 0, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
+      { idx: 1, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
+      { idx: 2, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
+      { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: rand() }
     ];
     for (const mi of matchInfos) {
       const [hg, ag] = sampleScore(mi.matrix);
@@ -1087,10 +1167,10 @@ function simulateGroupOncePlace(g, settings, matrixCache) {
   const infos = matches.map(m => matrixCache[m.id]);
   if (infos.some(mi => !mi)) return null;
   const st = [
-    { idx: 0, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
-    { idx: 1, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
-    { idx: 2, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
-    { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() }
+    { idx: 0, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
+    { idx: 1, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
+    { idx: 2, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
+    { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: rand() }
   ];
   for (const mi of infos) {
     const [hg, ag] = sampleScore(mi.matrix);
@@ -1111,7 +1191,55 @@ function simulateKnockout(teamA, teamB, strength) {
   const sA = strength[teamA] || 0.001;
   const sB = strength[teamB] || 0.001;
   const pA = sA / (sA + sB);
-  return Math.random() < pA ? teamA : teamB;
+  return rand() < pA ? teamA : teamB;
+}
+
+// ===== FIFA 2026 KO-Bracket-Struktur =====
+// Quelle: FIFA Match Schedule 2026 (veröffentlicht 06.12.2025).
+// Bei 32 Teams (12 Gruppensieger + 12 Zweite + 8 beste Dritte) gibt es ein vorgegebenes Bracket.
+// Die genaue FIFA-Zuordnung der "besten 3rd" zu R32-Slots hängt davon ab, welche Gruppen die
+// 3rds liefern. Wir verwenden die offizielle Regel-Tabelle (vereinfacht):
+//   - 12 Gruppensieger (1A..1L) und 12 Zweite (2A..2L) sind feste Slots
+//   - 8 beste Dritte werden in 8 Slots eingesetzt nach FIFA-Allokationstabelle
+// Vereinfachte Bracket-Definition: R32-Paare als (Slot-Bezeichner)-Tupel
+const FIFA_2026_R32 = [
+  // (Slot1, Slot2) – Paarungen für die 16 R32-Spiele (vereinfacht aus FIFA-Schema)
+  ['1A', '3CDEH'], ['1F', '2C'], ['1C', '3ABFL'], ['1H', '2I'],
+  ['1E', '3ABDG'], ['1B', '2K'], ['1G', '3ABEJ'], ['1D', '2F'],
+  ['1I', '3CHIK'], ['1J', '2L'], ['1K', '3DEHI'], ['1L', '2E'],
+  ['2A', '2H'], ['2D', '2G'], ['2J', '3FJKL'], ['2B', '3GHIL']
+];
+// Festes Mapping der R16-Pairings (Sieger R32-Spiel X trifft Sieger R32-Spiel Y)
+const FIFA_2026_R16_PAIRS = [[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,15]];
+// QF: Sieger der R16-Pairs treffen sich (0v1, 2v3, 4v5, 6v7)
+// SF: 0v1, 2v3
+// F: 0v1
+
+// Erstelle aus simulierten Gruppen-Standings das Bracket
+function buildBracket(groupResults, best3rdGroups) {
+  // groupResults: { A: [team1st, team2nd, team3rd, team4th], B: [...], ... }
+  // best3rdGroups: Array von 8 Gruppenbuchstaben deren 3rd in R32 ist (z.B. ['A','B','C','D','E','F','G','H'])
+  const lookup = (slot) => {
+    if (slot.startsWith('1')) { // Gruppensieger
+      const g = slot.slice(1);
+      return groupResults[g][0];
+    }
+    if (slot.startsWith('2')) { // Zweite
+      const g = slot.slice(1);
+      return groupResults[g][1];
+    }
+    if (slot.startsWith('3')) { // Dritter aus einer der 4 Kandidaten-Gruppen
+      const candidates = slot.slice(1).split('');
+      // Wähle den ersten Kandidaten der in best3rdGroups ist
+      for (const c of candidates) {
+        if (best3rdGroups.includes(c)) return groupResults[c][2];
+      }
+      // Fallback: irgendein 3rd aus best3rdGroups
+      return groupResults[best3rdGroups[0]][2];
+    }
+    return null;
+  };
+  return FIFA_2026_R32.map(([a, b]) => [lookup(a), lookup(b)]);
 }
 
 // Vollständige Turnier-Simulation. Liefert für jedes Team die Wkt
@@ -1140,55 +1268,48 @@ function simulateFullTournament(settings, nSims = 1500) {
   }
 
   for (let sim = 0; sim < nSims; sim++) {
-    // 1) Gruppen simulieren → 24 direkte Aufsteiger (12 × 1.+2.) + 12 Dritte
-    const winners = []; // 12 Teams (1.)
-    const runners = []; // 12 Teams (2.)
-    const thirds = []; // 12 Teams (3.) inkl. Stats für Best-3rd-Wahl
+    // 1) Gruppen simulieren → groupResults[g] = [1.,2.,3.,4.]
+    const groupResults = {};
+    const thirds = [];
     for (const g of Object.keys(GROUPS)) {
       const place = simulateGroupOncePlace(g, settings, matrixCache);
       if (!place) continue;
-      winners.push(place[0].team);
-      runners.push(place[1].team);
-      thirds.push({ team: place[2].team, pts: place[2].pts, gd: place[2].gd, gf: place[2].gf, rnd: Math.random() });
+      groupResults[g] = place.map(p => p.team);
+      thirds.push({ g, pts: place[2].pts, gd: place[2].gd, gf: place[2].gf, rnd: rand() });
     }
 
-    // 2) Beste 8 Dritte auswählen (nach Pts, GD, GF, dann zufällig)
+    // 2) Beste 8 Dritte auswählen (nach Pts, GD, GF) – das sind 8 Gruppenbuchstaben
     thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.rnd - b.rnd);
-    const best3rds = thirds.slice(0, 8).map(x => x.team);
+    const best3rdGroups = thirds.slice(0, 8).map(x => x.g);
 
-    // 3) R32 = 32 Teams. Wir mischen sie pseudo-zufällig (keine echte Bracket-Logik)
-    let bracket = [...winners, ...runners, ...best3rds];
-    // Shuffle für Cross-Matchups (vereinfachtes Modell, da exaktes Bracket nicht modelliert wird)
-    for (let i = bracket.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [bracket[i], bracket[j]] = [bracket[j], bracket[i]];
-    }
+    // 3) R32 via FIFA-Bracket-Struktur
+    const r32Pairs = buildBracket(groupResults, best3rdGroups);
 
     // R32 → R16
-    let next = [];
-    for (let i = 0; i < bracket.length; i += 2) {
-      const w = simulateKnockout(bracket[i], bracket[i+1], strength);
-      next.push(w);
+    let r16Teams = [];
+    for (const [a, b] of r32Pairs) {
+      const w = simulateKnockout(a, b, strength);
+      r16Teams.push(w);
     }
-    for (const tm of next) if (reached[tm]) reached[tm].r16++;
+    for (const tm of r16Teams) if (reached[tm]) reached[tm].r16++;
 
-    // R16 → QF
-    let qfNext = [];
-    for (let i = 0; i < next.length; i += 2) qfNext.push(simulateKnockout(next[i], next[i+1], strength));
-    for (const tm of qfNext) if (reached[tm]) reached[tm].qf++;
+    // R16 → QF (Pairings nach FIFA-Schema: 0v1, 2v3, ...)
+    let qfTeams = [];
+    for (const [i, j] of FIFA_2026_R16_PAIRS) qfTeams.push(simulateKnockout(r16Teams[i], r16Teams[j], strength));
+    for (const tm of qfTeams) if (reached[tm]) reached[tm].qf++;
 
     // QF → SF
-    let sfNext = [];
-    for (let i = 0; i < qfNext.length; i += 2) sfNext.push(simulateKnockout(qfNext[i], qfNext[i+1], strength));
-    for (const tm of sfNext) if (reached[tm]) reached[tm].sf++;
+    let sfTeams = [];
+    for (let i = 0; i < qfTeams.length; i += 2) sfTeams.push(simulateKnockout(qfTeams[i], qfTeams[i+1], strength));
+    for (const tm of sfTeams) if (reached[tm]) reached[tm].sf++;
 
     // SF → F
-    let finalNext = [];
-    for (let i = 0; i < sfNext.length; i += 2) finalNext.push(simulateKnockout(sfNext[i], sfNext[i+1], strength));
-    for (const tm of finalNext) if (reached[tm]) reached[tm].final++;
+    let finalTeams = [];
+    for (let i = 0; i < sfTeams.length; i += 2) finalTeams.push(simulateKnockout(sfTeams[i], sfTeams[i+1], strength));
+    for (const tm of finalTeams) if (reached[tm]) reached[tm].final++;
 
     // Final → Champion
-    const champion = simulateKnockout(finalNext[0], finalNext[1], strength);
+    const champion = simulateKnockout(finalTeams[0], finalTeams[1], strength);
     if (reached[champion]) reached[champion].champion++;
   }
 
@@ -1516,6 +1637,10 @@ function updateApiStatusFromKey() {
 function toast(msg, isError) {
   const el = document.getElementById('toast');
   if (!el) return;
+  // ARIA: role="status" + aria-live für Screen-Reader-Ankündigung
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.setAttribute('aria-atomic', 'true');
   el.textContent = msg;
   el.className = `fixed bottom-4 right-4 left-4 sm:left-auto z-[200] bg-zinc-900 border ${isError ? 'border-red-500' : 'border-emerald-500'} text-white px-4 py-2.5 rounded-lg shadow-xl text-sm transition-all`;
   clearTimeout(window._toast);
@@ -1523,6 +1648,14 @@ function toast(msg, isError) {
     el.className = `fixed bottom-4 right-4 left-4 sm:left-auto z-[200] bg-zinc-900 border ${isError ? 'border-red-500' : 'border-emerald-500'} text-white px-4 py-2.5 rounded-lg shadow-xl text-sm opacity-0 pointer-events-none transition-all`;
   }, 2400);
 }
+
+// ESC-Taste: schließt aktuell expandierte Match-Card (WCAG 2.1.2)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && expandedId) {
+    expandedId = null;
+    renderOverview(); renderGroups();
+  }
+});
 
 // ===== I18N: Apply static translations to DOM =====
 function applyStaticTranslations() {
