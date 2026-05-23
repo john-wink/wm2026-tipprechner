@@ -146,7 +146,18 @@ const I18N = {
     toastSimDone: "Simulation abgeschlossen",
 
     // Footer
-    footerText: "Open Source · 100% client-side · keine Tracker · Quoten von <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
+    footerText: "Open Source · 100% client-side · keine Tracker · Quoten von <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>",
+
+    // Disclaimer
+    disclaimerLink: "Hinweise & Disclaimer",
+    disclaimerTitle: "Hinweise zur Nutzung",
+    disclaimerIntro: "Dieses Tool ist ein nicht-kommerzielles Hobby-Projekt zur Optimierung von Kicktipp-Tipps.",
+    disclaimerGambling: "<strong>Kein Glücksspiel-Tool:</strong> Dieses Tool gibt KEINE Wett-Empfehlungen. Es analysiert ausschließlich öffentlich verfügbare Quoten und berechnet daraus den punkteoptimalen Tipp für ein Tippspiel — kein echtes Glücksspiel. Glücksspiel kann süchtig machen. Informationen und Hilfe: <a href=\"https://www.bzga.de/service/beratungstelefone/sucht/\" target=\"_blank\" rel=\"noopener\">BZgA</a> (DE).",
+    disclaimerData: "<strong>Datenschutz:</strong> Alle Daten bleiben in deinem Browser (localStorage / sessionStorage). Es gibt kein Backend, keinen Account, keine Analytics. Der API-Key wird ausschließlich in sessionStorage gespeichert und beim Schließen des Tabs entfernt — ein direkter Abruf erfolgt von deinem Browser an api.the-odds-api.com.",
+    disclaimerAccuracy: "<strong>Keine Garantie für Korrektheit:</strong> Das Modell (Poisson + Dixon-Coles) ist eine statistische Approximation. Der Backtest gegen WM 2022 zeigt, dass das Modell bei einzelnen Turnieren nicht besser performt als simple Baselines. Tipps sind als Heuristik gedacht, nicht als verlässliche Vorhersage.",
+    disclaimerLiability: "<strong>Keine Haftung:</strong> Nutzung erfolgt auf eigene Verantwortung. Für Schäden durch Nutzung oder verlorene Tippspiele wird keine Haftung übernommen.",
+    disclaimerClose: "Verstanden",
+    disclaimerSecurityNote: "Hinweis: Dein API-Key wird in <code>sessionStorage</code> gespeichert und beim Schließen des Tabs gelöscht. Du musst ihn nach jedem Tab-Schließen neu eingeben — das ist ein bewusster Sicherheits-Trade-off.",
   },
 
   en: {
@@ -280,7 +291,17 @@ const I18N = {
     toastShareFail: "Share failed",
     toastSimDone: "Simulation complete",
 
-    footerText: "Open source · 100% client-side · no trackers · odds via <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
+    footerText: "Open source · 100% client-side · no trackers · odds via <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>",
+
+    disclaimerLink: "Disclaimer & notes",
+    disclaimerTitle: "Important notes",
+    disclaimerIntro: "This is a non-commercial hobby project to optimize predictions for football pool games (Kicktipp).",
+    disclaimerGambling: "<strong>Not a gambling tool:</strong> This tool does NOT recommend betting. It only analyses publicly available odds to compute the points-optimal pick for a pool — not real gambling. Gambling can be addictive. Help and info: <a href=\"https://www.begambleaware.org/\" target=\"_blank\" rel=\"noopener\">BeGambleAware</a> (UK), <a href=\"https://www.ncpgambling.org/\" target=\"_blank\" rel=\"noopener\">NCPG</a> (US).",
+    disclaimerData: "<strong>Privacy:</strong> All data stays in your browser (localStorage / sessionStorage). No backend, no account, no analytics. Your API key is stored exclusively in sessionStorage and is cleared when you close the tab — direct requests go from your browser to api.the-odds-api.com.",
+    disclaimerAccuracy: "<strong>No guarantees:</strong> The model (Poisson + Dixon-Coles) is a statistical approximation. Backtest against World Cup 2022 shows the model is not better than simple baselines on a single tournament. Picks are heuristics, not reliable predictions.",
+    disclaimerLiability: "<strong>No liability:</strong> Use at your own risk. No liability for damages or lost pool games.",
+    disclaimerClose: "Got it",
+    disclaimerSecurityNote: "Note: Your API key is stored in <code>sessionStorage</code> and cleared when the tab closes. You'll have to re-enter it on each new tab — this is an intentional security trade-off.",
   },
 
   fr: {
@@ -414,7 +435,17 @@ const I18N = {
     toastShareFail: "Échec du partage",
     toastSimDone: "Simulation terminée",
 
-    footerText: "Open source · 100% côté client · sans tracker · cotes via <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
+    footerText: "Open source · 100% côté client · sans tracker · cotes via <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>",
+
+    disclaimerLink: "Mentions & disclaimer",
+    disclaimerTitle: "Informations importantes",
+    disclaimerIntro: "Ceci est un projet personnel non-commercial pour optimiser les pronostics de tippspiel (Kicktipp).",
+    disclaimerGambling: "<strong>Pas un outil de pari :</strong> Cet outil ne recommande PAS de paris. Il analyse uniquement des cotes publiques pour calculer le pronostic optimal — pas du jeu d'argent réel. Le jeu peut devenir addictif. Aide et infos : <a href=\"https://www.joueurs-info-service.fr/\" target=\"_blank\" rel=\"noopener\">Joueurs Info Service</a> (FR).",
+    disclaimerData: "<strong>Confidentialité :</strong> Toutes les données restent dans votre navigateur (localStorage / sessionStorage). Pas de serveur, pas de compte, pas d'analytics. Votre clé API est stockée exclusivement dans sessionStorage et effacée à la fermeture de l'onglet — les requêtes vont directement de votre navigateur vers api.the-odds-api.com.",
+    disclaimerAccuracy: "<strong>Aucune garantie :</strong> Le modèle (Poisson + Dixon-Coles) est une approximation statistique. Le backtest contre la Coupe du Monde 2022 montre que le modèle n'est pas meilleur que des baselines simples sur un seul tournoi. Les pronostics sont des heuristiques, pas des prédictions fiables.",
+    disclaimerLiability: "<strong>Aucune responsabilité :</strong> Utilisation à vos risques et périls. Aucune responsabilité pour les dommages ou les pronostics perdus.",
+    disclaimerClose: "Compris",
+    disclaimerSecurityNote: "Remarque : votre clé API est stockée dans <code>sessionStorage</code> et effacée à la fermeture de l'onglet. Vous devez la re-saisir à chaque nouvel onglet — un compromis de sécurité intentionnel.",
   },
 
   es: {
@@ -548,7 +579,17 @@ const I18N = {
     toastShareFail: "Falló compartir",
     toastSimDone: "Simulación completada",
 
-    footerText: "Open source · 100% lado cliente · sin trackers · cuotas vía <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
+    footerText: "Open source · 100% lado cliente · sin trackers · cuotas vía <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>",
+
+    disclaimerLink: "Avisos & disclaimer",
+    disclaimerTitle: "Información importante",
+    disclaimerIntro: "Este es un proyecto personal no-comercial para optimizar pronósticos de tippspiel (Kicktipp).",
+    disclaimerGambling: "<strong>No es una herramienta de apuestas:</strong> Esta herramienta NO recomienda apuestas. Sólo analiza cuotas públicas para calcular el pronóstico óptimo — no es juego real. El juego puede ser adictivo. Ayuda e info: <a href=\"https://www.jugarbien.es/\" target=\"_blank\" rel=\"noopener\">Jugar Bien</a> (ES).",
+    disclaimerData: "<strong>Privacidad:</strong> Todos los datos quedan en tu navegador (localStorage / sessionStorage). No hay backend, ni cuenta, ni analytics. Tu clave API se guarda exclusivamente en sessionStorage y se borra al cerrar la pestaña — las peticiones van directamente de tu navegador a api.the-odds-api.com.",
+    disclaimerAccuracy: "<strong>Sin garantías:</strong> El modelo (Poisson + Dixon-Coles) es una aproximación estadística. El backtest contra el Mundial 2022 muestra que el modelo no es mejor que baselines simples en un solo torneo. Los pronósticos son heurísticos, no predicciones fiables.",
+    disclaimerLiability: "<strong>Sin responsabilidad:</strong> Uso bajo tu propia responsabilidad. Sin responsabilidad por daños o pronósticos perdidos.",
+    disclaimerClose: "Entendido",
+    disclaimerSecurityNote: "Nota: Tu clave API se guarda en <code>sessionStorage</code> y se borra al cerrar la pestaña. Tendrás que re-introducirla en cada nueva pestaña — un compromiso de seguridad intencional.",
   }
 };
 

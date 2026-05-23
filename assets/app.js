@@ -1523,7 +1523,38 @@ function setAggOverride(mid, method) {
 }
 
 // ===== STORAGE =====
+// SICHERHEIT: API-Key wandert in sessionStorage statt localStorage.
+//   - sessionStorage ist tab-scoped: beim Tab-Schließen weg
+//   - XSS-Angriffe haben kein persistentes Ziel mehr (Angreifer kann den Key nur
+//     während einer aktiven Session abgreifen, nicht später)
+//   - Trade-off: User muss den Key bei jedem neuen Tab eingeben.
+// Alle anderen Daten (Quoten, Settings, Snapshots) bleiben in localStorage —
+// die sind nicht sicherheitskritisch.
 const STORAGE_KEY = 'wm2026-kicktipp-optimizer-v3';
+const SESSION_API_KEY = 'wm2026-apikey-session';
+
+function saveApiKey(key) {
+  try {
+    if (key && key.length > 0) sessionStorage.setItem(SESSION_API_KEY, key);
+    else sessionStorage.removeItem(SESSION_API_KEY);
+  } catch (e) {}
+  // Falls noch ein alter localStorage-Eintrag vorhanden ist: weg damit (Migration)
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const state = JSON.parse(raw);
+      if (state.settings && state.settings.apiKey) {
+        delete state.settings.apiKey;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+    }
+  } catch (e) {}
+}
+function loadApiKey() {
+  try { return sessionStorage.getItem(SESSION_API_KEY) || ''; }
+  catch (e) { return ''; }
+}
+
 function saveState(silent) {
   const state = {
     matchData,
@@ -1534,7 +1565,7 @@ function saveState(silent) {
       ptsDiff: document.getElementById('ptsDiff').value,
       ptsTend: document.getElementById('ptsTend').value,
       maxGoals: document.getElementById('maxGoals').value,
-      apiKey: document.getElementById('apiKey').value,
+      // apiKey bewusst NICHT in localStorage — siehe SESSION_API_KEY oben
       defaultAgg: document.getElementById('defaultAgg').value,
       regEu: document.getElementById('regEu').checked,
       regUk: document.getElementById('regUk').checked,
@@ -1545,6 +1576,9 @@ function saveState(silent) {
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // API-Key separat in sessionStorage
+    const apiKeyEl = document.getElementById('apiKey');
+    if (apiKeyEl) saveApiKey(apiKeyEl.value);
     if (!silent) toast(t('toastSaved'));
   } catch (e) { toast(t('toastSaveFail', { msg: e.message }), true); }
 }
@@ -1569,11 +1603,15 @@ function loadState() {
     clearGroupSimCache();
     if (state.settings) {
       for (const [k, v] of Object.entries(state.settings)) {
+        if (k === 'apiKey') continue; // sicherheits-kritisch: kommt aus sessionStorage
         const el = document.getElementById(k);
         if (!el) continue;
         if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
       }
     }
+    // API-Key aus sessionStorage
+    const apiEl = document.getElementById('apiKey');
+    if (apiEl) apiEl.value = loadApiKey();
     updateApiStatusFromKey();
     renderOverview(); renderGroups(); renderSpecials();
     toast(t('toastLoaded'));
@@ -1593,6 +1631,7 @@ function clearAll() {
   document.getElementById('defaultAgg').value = 'median';
   ['regEu','regUk','regUs','regAu'].forEach(id => document.getElementById(id).checked = true);
   localStorage.removeItem(STORAGE_KEY);
+  try { sessionStorage.removeItem(SESSION_API_KEY); } catch (e) {}
   expandedId = null;
   setApiStatus('', t('apiStatusEmpty'));
   renderOverview(); renderGroups(); renderSpecials();
@@ -1649,13 +1688,64 @@ function toast(msg, isError) {
   }, 2400);
 }
 
-// ESC-Taste: schließt aktuell expandierte Match-Card (WCAG 2.1.2)
+// ESC-Taste: schließt aktuell expandierte Match-Card (WCAG 2.1.2) oder Disclaimer
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && expandedId) {
-    expandedId = null;
-    renderOverview(); renderGroups();
+  if (e.key === 'Escape') {
+    if (document.getElementById('disclaimerModal')?.classList.contains('open')) {
+      closeDisclaimer(); return;
+    }
+    if (expandedId) {
+      expandedId = null;
+      renderOverview(); renderGroups();
+    }
   }
 });
+
+// ===== DISCLAIMER =====
+const DISCLAIMER_ACK_KEY = 'wm2026-disclaimer-ack';
+
+function showDisclaimer(force) {
+  const acked = localStorage.getItem(DISCLAIMER_ACK_KEY);
+  if (!force && acked) return;
+  let modal = document.getElementById('disclaimerModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'disclaimerModal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'disclaimerTitleHeading');
+    modal.className = 'fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4 hidden';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl">
+      <h2 id="disclaimerTitleHeading" class="text-xl font-semibold mb-3">${t('disclaimerTitle')}</h2>
+      <p class="text-sm text-zinc-300 mb-4">${t('disclaimerIntro')}</p>
+      <div class="space-y-3 text-sm text-zinc-300 mb-5">
+        <p>${t('disclaimerGambling')}</p>
+        <p>${t('disclaimerData')}</p>
+        <p>${t('disclaimerAccuracy')}</p>
+        <p>${t('disclaimerLiability')}</p>
+      </div>
+      <div class="flex justify-end">
+        <button onclick="closeDisclaimer()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-md text-sm font-semibold min-h-[44px]">${t('disclaimerClose')}</button>
+      </div>
+    </div>
+  `;
+  modal.classList.remove('hidden');
+  modal.classList.add('open', 'flex');
+  // Focus aufs Close-Button für Tastatur-Bedienung
+  setTimeout(() => modal.querySelector('button')?.focus(), 50);
+}
+
+function closeDisclaimer() {
+  const modal = document.getElementById('disclaimerModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('open', 'flex');
+  }
+  try { localStorage.setItem(DISCLAIMER_ACK_KEY, '1'); } catch (e) {}
+}
 
 // ===== I18N: Apply static translations to DOM =====
 function applyStaticTranslations() {
@@ -1691,9 +1781,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('change', () => {
-      if (id === 'apiKey') updateApiStatusFromKey();
-      saveState(true);
+      if (id === 'apiKey') {
+        // API-Key sofort in sessionStorage, NICHT in localStorage
+        saveApiKey(el.value);
+        updateApiStatusFromKey();
+      } else {
+        saveState(true);
+      }
     });
+    // Auch bei jeder Tasteneingabe auf API-Key direkt persistieren
+    if (id === 'apiKey') {
+      el.addEventListener('input', () => saveApiKey(el.value));
+    }
   });
 
   // Auto-load
@@ -1713,17 +1812,49 @@ window.addEventListener('DOMContentLoaded', () => {
       if (state.outrightData) outrightData = state.outrightData;
       if (state.topScorerOverride !== undefined) topScorerOverride = state.topScorerOverride || '';
       if (state.settings) for (const [k, v] of Object.entries(state.settings)) {
+        if (k === 'apiKey') continue; // sicherheits-kritisch: kommt aus sessionStorage
         const el = document.getElementById(k);
         if (!el) continue;
         if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
       }
     }
   } catch (e) {}
+  // API-Key aus sessionStorage (nicht localStorage — Sicherheit)
+  const apiEl = document.getElementById('apiKey');
+  if (apiEl) apiEl.value = loadApiKey();
   updateApiStatusFromKey();
   renderOverview(); renderGroups(); renderSpecials();
 
   // Service Worker registrieren (PWA)
   registerServiceWorker();
+
+  // Disclaimer beim ersten Besuch zeigen
+  showDisclaimer(false);
+
+  // Footer-Link für Disclaimer einfügen falls vorhanden
+  const footer = document.querySelector('footer p');
+  if (footer && !document.getElementById('disclaimerFooterLink')) {
+    const sep = document.createElement('span');
+    sep.textContent = ' · ';
+    const link = document.createElement('a');
+    link.id = 'disclaimerFooterLink';
+    link.href = '#';
+    link.textContent = t('disclaimerLink');
+    link.className = 'underline hover:text-zinc-300';
+    link.onclick = (e) => { e.preventDefault(); showDisclaimer(true); };
+    footer.appendChild(sep);
+    footer.appendChild(link);
+  }
+
+  // Security-Hinweis neben dem API-Key-Input
+  const apiKeyEl = document.getElementById('apiKey');
+  if (apiKeyEl && !document.getElementById('apiKeySecurityNote')) {
+    const note = document.createElement('p');
+    note.id = 'apiKeySecurityNote';
+    note.className = 'text-[11px] text-zinc-500 mt-1 col-start-2';
+    note.innerHTML = t('disclaimerSecurityNote');
+    apiKeyEl.parentElement?.appendChild(note);
+  }
 });
 
 async function registerServiceWorker() {
