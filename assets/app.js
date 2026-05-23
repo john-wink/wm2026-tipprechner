@@ -236,11 +236,13 @@ function renderSpecials() {
   const settings = getSettings();
   const sections = [];
 
-  // 1) WELTMEISTER
-  sections.push(renderChampionSection());
-  // 2) HALBFINALISTEN (4 Teams)
-  sections.push(renderSemifinalistsSection());
-  // 3) GRUPPENSIEGER (12 Gruppen)
+  // 0) FORECAST / Punkte-Erwartung
+  sections.push(renderForecastSection(settings));
+  // 1) WELTMEISTER (mit voller Sim falls möglich)
+  sections.push(renderChampionSection(settings));
+  // 2) HALBFINALISTEN (aus voller Sim oder Outright-Heuristik)
+  sections.push(renderSemifinalistsSection(settings));
+  // 3) GRUPPENSIEGER (Monte-Carlo)
   sections.push(renderGroupWinnersSection(settings));
   // 4) TOP-TORSCHÜTZE
   sections.push(renderTopScorerSection());
@@ -248,19 +250,74 @@ function renderSpecials() {
   root.innerHTML = sections.join('');
 }
 
-function renderChampionSection() {
-  if (!outrightData || !outrightData.teams.length) {
+function renderForecastSection(settings) {
+  const fc = computeOverallForecast(settings);
+  if (fc.matchesWithTip === 0) {
+    return wrapSection(t('sectionForecast'), `<p class="text-zinc-500 text-sm">${t('noGroupOddsYet')}</p>`);
+  }
+  return wrapSection(t('sectionForecast'),
+    `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+       <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3">
+         <div class="text-[10px] uppercase tracking-wider text-zinc-500">${t('forecastExpected')}</div>
+         <div class="font-mono text-2xl font-semibold text-emerald-400 mt-1">${fc.expected.toFixed(1)}</div>
+         <div class="text-[11px] text-zinc-500">${t('forecastUnitPts')}</div>
+       </div>
+       <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3">
+         <div class="text-[10px] uppercase tracking-wider text-zinc-500">${t('forecastRange')}</div>
+         <div class="font-mono text-lg font-semibold text-white mt-1">${fc.lowRange.toFixed(0)}&ndash;${fc.highRange.toFixed(0)}</div>
+         <div class="text-[11px] text-zinc-500">±1σ</div>
+       </div>
+       <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3">
+         <div class="text-[10px] uppercase tracking-wider text-zinc-500">${t('forecastBestCase')}</div>
+         <div class="font-mono text-lg font-semibold text-blue-400 mt-1">${fc.bestCase}</div>
+         <div class="text-[11px] text-zinc-500">${fc.matchesWithTip} × ${settings.exact}</div>
+       </div>
+       <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3">
+         <div class="text-[10px] uppercase tracking-wider text-zinc-500">${t('forecastWorstCase')}</div>
+         <div class="font-mono text-lg font-semibold text-zinc-500 mt-1">0</div>
+         <div class="text-[11px] text-zinc-500">${t('forecastIfAllWrong')}</div>
+       </div>
+     </div>
+     <div class="mt-3 flex gap-2 flex-wrap">
+       <button onclick="sharePicks()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-3 py-2 rounded-md font-medium min-h-[36px]">${t('shareBtn')}</button>
+       <button onclick="runFullSimulation()" class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-sm px-3 py-2 rounded-md font-medium min-h-[36px]">${t('runFullSim')}</button>
+     </div>`
+  );
+}
+
+function runFullSimulation() {
+  const settings = getSettings();
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = t('simRunningShort'); }
+  // Async-ish: setTimeout 0 für UI-Update
+  setTimeout(() => {
+    simulateFullTournament(settings, 1500);
+    renderSpecials();
+    if (btn) btn.disabled = false;
+    toast(t('toastSimDone'));
+  }, 30);
+}
+
+function renderChampionSection(settings) {
+  // Bevorzuge volle Sim falls vorhanden, sonst Outright
+  const fromSim = tournamentSimResult && tournamentSimResult.teams.length > 0;
+  if (!fromSim && (!outrightData || !outrightData.teams.length)) {
     return wrapSection(t('specialChampion'), `<p class="text-zinc-500 text-sm">${t('noOutrightYet')}</p>`);
   }
-  const top = outrightData.teams[0];
-  const rest = outrightData.teams.slice(1, 8);
+  const list = fromSim
+    ? tournamentSimResult.teams.map(t => ({ key: t.key, label: t.label, prob: t.champion })).filter(x => x.prob > 0).sort((a,b)=>b.prob-a.prob)
+    : outrightData.teams;
+  const top = list[0];
+  const rest = list.slice(1, 8);
+  const sourceLabel = fromSim ? t('sourceFromSim', { n: tournamentSimResult.nSims }) : t('sourceFromOutright');
   return wrapSection(t('specialChampion'),
     `<div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
        <div class="flex-1">
-         <div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">${t('topPickShort')}</div>
-         <div class="flex items-baseline gap-3">
+         <div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">${t('topPickShort')} <span class="text-zinc-600">· ${sourceLabel}</span></div>
+         <div class="flex items-baseline gap-3 flex-wrap">
            <div class="text-2xl sm:text-3xl font-semibold text-emerald-400">${top.label}</div>
            <div class="font-mono text-base text-zinc-300">${(top.prob*100).toFixed(1)}%</div>
+           ${renderMovementBadge(top.key)}
          </div>
        </div>
      </div>
@@ -273,11 +330,26 @@ function renderChampionSection() {
   );
 }
 
-function renderSemifinalistsSection() {
-  if (!outrightData || !outrightData.teams.length) {
+function renderMovementBadge(teamKey) {
+  const mv = getMovement(teamKey);
+  if (!mv || Math.abs(mv.delta) < 0.005) return '';
+  const isUp = mv.delta > 0;
+  const cls = isUp ? 'text-emerald-400' : 'text-red-400';
+  const arrow = isUp ? '▲' : '▼';
+  return `<span class="${cls} text-xs font-mono" title="${t('vsLast')}: ${(mv.previous*100).toFixed(1)}%">${arrow} ${Math.abs(mv.delta*100).toFixed(1)}%</span>`;
+}
+
+function renderSemifinalistsSection(settings) {
+  // Bevorzuge volle Sim
+  const fromSim = tournamentSimResult && tournamentSimResult.teams.length > 0;
+  if (!fromSim && (!outrightData || !outrightData.teams.length)) {
     return wrapSection(t('specialSemifinalists'), `<p class="text-zinc-500 text-sm">${t('noOutrightYet')}</p>`);
   }
-  const top4 = outrightData.teams.slice(0, 4);
+  const list = fromSim
+    ? tournamentSimResult.teams.map(t => ({ key: t.key, label: t.label, prob: t.sf })).filter(x => x.prob > 0).sort((a,b)=>b.prob-a.prob)
+    : outrightData.teams;
+  const top4 = list.slice(0, 4);
+  const note = fromSim ? t('sourceFromSim', { n: tournamentSimResult.nSims }) : t('semifinalistsNote');
   return wrapSection(t('specialSemifinalists'),
     `<div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">${t('topPickShort')}</div>
      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
@@ -289,7 +361,7 @@ function renderSemifinalistsSection() {
          </div>
        `).join('')}
      </div>
-     <p class="text-[11px] text-zinc-500 italic">${t('semifinalistsNote')}</p>`
+     <p class="text-[11px] text-zinc-500 italic">${note}</p>`
   );
 }
 
@@ -591,6 +663,10 @@ function renderDetailPanel(m, r, settings, compact = false) {
       <div class="text-[10px] text-zinc-500">${(s.p*100).toFixed(1)}%</div>
     </div>`).join('');
 
+  // Heatmap der Score-Matrix (8x8 oder 6x6 bei compact)
+  const heatmapSize = compact ? 6 : 8;
+  const heatmapHTML = renderHeatmap(r.matrix, r.bestTip, heatmapSize);
+
   let bmHTML = '';
   if (m.bookmakerData && m.bookmakerData.length > 0) {
     bmHTML = `
@@ -640,6 +716,13 @@ function renderDetailPanel(m, r, settings, compact = false) {
     </div>
   `;
 
+  const heatmapSection = `
+    <div>
+      <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailHeatmap')}</h4>
+      ${heatmapHTML}
+    </div>
+  `;
+
   const manualSection = `
     <div>
       <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${compact ? '1 · X · 2' : t('detailManualOdds')}</h4>
@@ -652,10 +735,154 @@ function renderDetailPanel(m, r, settings, compact = false) {
       ${probSection}
       ${aggHTML}
       ${topSection}
+      ${heatmapSection}
       ${manualSection}
       ${bmHTML}
     </div>
   `;
+}
+
+// ===== HEATMAP: 8x8 Score-Matrix mit Farbgradienten =====
+function renderHeatmap(matrix, bestTip, size = 8) {
+  const s = Math.min(size, matrix.length - 1);
+  // Max-Wkt finden für Normierung
+  let maxP = 0;
+  for (let i = 0; i <= s; i++) for (let j = 0; j <= s; j++) if (matrix[i][j] > maxP) maxP = matrix[i][j];
+  if (maxP <= 0) maxP = 0.01;
+
+  // Header row
+  let html = '<div class="overflow-x-auto"><table class="border-collapse text-[10px] font-mono mx-auto"><thead><tr><th class="text-zinc-500 px-1 py-0.5"></th>';
+  for (let j = 0; j <= s; j++) html += `<th class="text-zinc-500 px-1.5 py-0.5 text-center font-medium">${j}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (let i = 0; i <= s; i++) {
+    html += `<tr><th class="text-zinc-500 px-1.5 py-0.5 text-right font-medium">${i}</th>`;
+    for (let j = 0; j <= s; j++) {
+      const p = matrix[i][j];
+      const intensity = Math.min(1, p / maxP); // 0..1
+      const isTip = (i === bestTip.h && j === bestTip.a);
+      const isMode = i === 0 && j === 0;
+      // Diskrete Intensitäts-Stufen mit festen Tailwind-Klassen (für Tailwind-Scanner)
+      let bgCls;
+      if (intensity > 0.85) bgCls = 'bg-emerald-500/70';
+      else if (intensity > 0.6) bgCls = 'bg-emerald-500/45';
+      else if (intensity > 0.4) bgCls = 'bg-emerald-500/30';
+      else if (intensity > 0.2) bgCls = 'bg-emerald-500/15';
+      else if (intensity > 0.05) bgCls = 'bg-emerald-500/5';
+      else bgCls = 'bg-zinc-900';
+      const ring = isTip ? 'ring-2 ring-emerald-400 ring-inset' : '';
+      const txt = (p*100) >= 1 ? (p*100).toFixed(0) : '·';
+      const textCls = intensity > 0.4 ? 'text-white' : 'text-zinc-500';
+      html += `<td class="${bgCls} ${ring} ${textCls} px-1.5 py-1 text-center" title="${i}:${j} = ${(p*100).toFixed(2)}%">${txt}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  html += '<p class="text-[10px] text-zinc-500 mt-1 text-center">Heim ↓ · Auswärts → · Werte in %</p></div>';
+  return html;
+}
+
+// ===== BEST-CASE / WORST-CASE PUNKTESTAND =====
+function computeOverallForecast(settings) {
+  const rules = { exact: settings.exact, diff: settings.diff, tend: settings.tend };
+  let expected = 0;
+  let bestCase = 0;
+  let totalMatchesWithTip = 0;
+  let totalVariance = 0;
+  for (const m of Object.values(matchData)) {
+    const r = computeMatch(m, settings);
+    if (!r) continue;
+    totalMatchesWithTip++;
+    expected += r.bestTip.ep;
+    bestCase += rules.exact;
+    // Varianz: Σ p_i * (points_i - EP)² über alle möglichen Ergebnisse
+    let variance = 0;
+    for (let i = 0; i < r.matrix.length; i++) for (let j = 0; j < r.matrix[i].length; j++) {
+      const pts = ktPoints(r.bestTip.h, r.bestTip.a, i, j, rules);
+      variance += r.matrix[i][j] * (pts - r.bestTip.ep) ** 2;
+    }
+    totalVariance += variance;
+  }
+  const stdDev = Math.sqrt(totalVariance);
+  return {
+    matchesWithTip: totalMatchesWithTip,
+    expected: expected,
+    bestCase: bestCase,
+    worstCase: 0,
+    stdDev,
+    lowRange: Math.max(0, expected - stdDev),
+    highRange: expected + stdDev
+  };
+}
+
+// ===== QUOTEN-VERLAUF / SNAPSHOTS =====
+const SNAPSHOTS_KEY = 'wm2026-snapshots';
+const MAX_SNAPSHOTS = 10;
+
+function saveSnapshot() {
+  // Speichert aktuellen Stand (outright + group winner sims) als Snapshot
+  try {
+    const existing = JSON.parse(localStorage.getItem(SNAPSHOTS_KEY) || '[]');
+    if (!outrightData) return;
+    const snap = {
+      ts: new Date().toISOString(),
+      outright: outrightData.teams.slice(0, 20).map(t => ({ k: t.key, p: t.prob }))
+    };
+    existing.unshift(snap);
+    while (existing.length > MAX_SNAPSHOTS) existing.pop();
+    localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(existing));
+  } catch (e) {}
+}
+
+function getMovement(teamKey) {
+  // Vergleicht aktuelle Outright-Wkt mit dem Snapshot davor
+  if (!outrightData) return null;
+  try {
+    const snaps = JSON.parse(localStorage.getItem(SNAPSHOTS_KEY) || '[]');
+    if (snaps.length < 2) return null;
+    const prev = snaps[1]; // index 0 ist der aktuelle (zuletzt gespeichert)
+    const prevTeam = prev.outright.find(x => x.k === teamKey);
+    const current = outrightData.teams.find(t => t.key === teamKey);
+    if (!prevTeam || !current) return null;
+    return { current: current.prob, previous: prevTeam.p, delta: current.prob - prevTeam.p, prevTs: prev.ts };
+  } catch (e) { return null; }
+}
+
+// ===== SHARE API =====
+async function sharePicks() {
+  const settings = getSettings();
+  const lines = [];
+  lines.push(t('shareHeader'));
+  lines.push('');
+  for (const m of Object.values(matchData)) {
+    const r = computeMatch(m, settings);
+    if (!r) continue;
+    const date = m.apiCommenceTime ? new Date(m.apiCommenceTime).toLocaleDateString(window.APP_LANG, { day:'2-digit', month:'2-digit' }) : '–';
+    lines.push(`${date} ${teamLabel(m.home)} – ${teamLabel(m.away)}: ${r.bestTip.h}:${r.bestTip.a}  (EV ${r.bestTip.ep.toFixed(2)})`);
+  }
+  if (outrightData && outrightData.teams.length > 0) {
+    lines.push('');
+    lines.push(t('shareChampionLine', { team: outrightData.teams[0].label, p: (outrightData.teams[0].prob*100).toFixed(1) }));
+  }
+  lines.push('');
+  lines.push(location.origin + '/' + window.APP_LANG + '/');
+
+  const text = lines.join('\n');
+  const shareData = { title: t('brandTitle'), text };
+
+  try {
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      await navigator.share(shareData);
+      toast(t('toastShared'));
+      return;
+    }
+  } catch (e) { /* fallthrough zu Clipboard */ }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(t('toastCopied'));
+  } catch (e) {
+    toast(t('toastShareFail'), true);
+  }
 }
 
 function renderManualOddsInput(m, compact = false) {
@@ -835,6 +1062,156 @@ function getTopOutright(n = 4) {
   return outrightData.teams.slice(0, n);
 }
 
+// ===== VOLLE TURNIER-SIMULATION =====
+// Wir simulieren Gruppe → R32 → R16 → QF → SF → F.
+// Output: pro Team und Runde die Wahrscheinlichkeit dort zu sein.
+let tournamentSimResult = null;
+
+function getTeamStrength() {
+  // Aus Outright-Wkt eine "Stärke" ableiten. Falls kein Outright vorhanden: Default.
+  const s = {};
+  if (outrightData && outrightData.teams) {
+    for (const t of outrightData.teams) s[t.key] = Math.max(t.prob, 0.001);
+  }
+  // Defaults für nicht-gerankte Teams
+  for (const g of Object.keys(GROUPS)) {
+    for (const t of GROUPS[g].teams) {
+      if (!(t in s)) s[t] = 0.005; // sehr schwach
+    }
+  }
+  return s;
+}
+
+function simulateGroupOncePlace(g, settings, matrixCache) {
+  const matches = Object.values(matchData).filter(m => m.group === g);
+  const infos = matches.map(m => matrixCache[m.id]);
+  if (infos.some(mi => !mi)) return null;
+  const st = [
+    { idx: 0, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
+    { idx: 1, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
+    { idx: 2, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
+    { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() }
+  ];
+  for (const mi of infos) {
+    const [hg, ag] = sampleScore(mi.matrix);
+    st[mi.homeIdx].gf += hg; st[mi.homeIdx].ga += ag;
+    st[mi.awayIdx].gf += ag; st[mi.awayIdx].ga += hg;
+    if (hg > ag) st[mi.homeIdx].pts += 3;
+    else if (hg < ag) st[mi.awayIdx].pts += 3;
+    else { st[mi.homeIdx].pts++; st[mi.awayIdx].pts++; }
+  }
+  st.sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || a.tiebreak - b.tiebreak);
+  return st.map(s => ({
+    team: GROUPS[g].teams[s.idx], pts: s.pts, gd: s.gf - s.ga, gf: s.gf
+  }));
+}
+
+// KO-Spiel: P(A gewinnt) basierend auf relativer Stärke (Bradley-Terry-Modell)
+function simulateKnockout(teamA, teamB, strength) {
+  const sA = strength[teamA] || 0.001;
+  const sB = strength[teamB] || 0.001;
+  const pA = sA / (sA + sB);
+  return Math.random() < pA ? teamA : teamB;
+}
+
+// Vollständige Turnier-Simulation. Liefert für jedes Team die Wkt
+// in jeder Runde (R16, R8 (QF), SF, F, Champion).
+function simulateFullTournament(settings, nSims = 1500) {
+  // Prüfe ob alle Gruppen Daten haben
+  for (const g of Object.keys(GROUPS)) {
+    const ms = Object.values(matchData).filter(m => m.group === g);
+    for (const m of ms) {
+      if (!computeMatch(m, settings)) return null; // Daten fehlen
+    }
+  }
+
+  // Pre-compute Score-Matrizen für alle Gruppenspiele (nur einmal)
+  const matrixCache = {};
+  for (const m of Object.values(matchData)) {
+    const r = computeMatch(m, settings);
+    if (r) matrixCache[m.id] = { homeIdx: m.homeIdx, awayIdx: m.awayIdx, matrix: r.matrix };
+  }
+
+  const strength = getTeamStrength();
+  const rounds = ['r16', 'qf', 'sf', 'final', 'champion'];
+  const reached = {};
+  for (const teamKey of Object.keys(TEAM_LABELS)) {
+    reached[teamKey] = { r16: 0, qf: 0, sf: 0, final: 0, champion: 0 };
+  }
+
+  for (let sim = 0; sim < nSims; sim++) {
+    // 1) Gruppen simulieren → 24 direkte Aufsteiger (12 × 1.+2.) + 12 Dritte
+    const winners = []; // 12 Teams (1.)
+    const runners = []; // 12 Teams (2.)
+    const thirds = []; // 12 Teams (3.) inkl. Stats für Best-3rd-Wahl
+    for (const g of Object.keys(GROUPS)) {
+      const place = simulateGroupOncePlace(g, settings, matrixCache);
+      if (!place) continue;
+      winners.push(place[0].team);
+      runners.push(place[1].team);
+      thirds.push({ team: place[2].team, pts: place[2].pts, gd: place[2].gd, gf: place[2].gf, rnd: Math.random() });
+    }
+
+    // 2) Beste 8 Dritte auswählen (nach Pts, GD, GF, dann zufällig)
+    thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.rnd - b.rnd);
+    const best3rds = thirds.slice(0, 8).map(x => x.team);
+
+    // 3) R32 = 32 Teams. Wir mischen sie pseudo-zufällig (keine echte Bracket-Logik)
+    let bracket = [...winners, ...runners, ...best3rds];
+    // Shuffle für Cross-Matchups (vereinfachtes Modell, da exaktes Bracket nicht modelliert wird)
+    for (let i = bracket.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [bracket[i], bracket[j]] = [bracket[j], bracket[i]];
+    }
+
+    // R32 → R16
+    let next = [];
+    for (let i = 0; i < bracket.length; i += 2) {
+      const w = simulateKnockout(bracket[i], bracket[i+1], strength);
+      next.push(w);
+    }
+    for (const tm of next) if (reached[tm]) reached[tm].r16++;
+
+    // R16 → QF
+    let qfNext = [];
+    for (let i = 0; i < next.length; i += 2) qfNext.push(simulateKnockout(next[i], next[i+1], strength));
+    for (const tm of qfNext) if (reached[tm]) reached[tm].qf++;
+
+    // QF → SF
+    let sfNext = [];
+    for (let i = 0; i < qfNext.length; i += 2) sfNext.push(simulateKnockout(qfNext[i], qfNext[i+1], strength));
+    for (const tm of sfNext) if (reached[tm]) reached[tm].sf++;
+
+    // SF → F
+    let finalNext = [];
+    for (let i = 0; i < sfNext.length; i += 2) finalNext.push(simulateKnockout(sfNext[i], sfNext[i+1], strength));
+    for (const tm of finalNext) if (reached[tm]) reached[tm].final++;
+
+    // Final → Champion
+    const champion = simulateKnockout(finalNext[0], finalNext[1], strength);
+    if (reached[champion]) reached[champion].champion++;
+  }
+
+  // In Wahrscheinlichkeiten konvertieren
+  const teams = [];
+  for (const teamKey of Object.keys(reached)) {
+    const r = reached[teamKey];
+    if (r.r16 === 0 && r.champion === 0) continue; // hat sich nie qualifiziert
+    teams.push({
+      key: teamKey,
+      label: teamLabel(teamKey),
+      r16: r.r16 / nSims,
+      qf: r.qf / nSims,
+      sf: r.sf / nSims,
+      final: r.final / nSims,
+      champion: r.champion / nSims
+    });
+  }
+  teams.sort((a, b) => b.champion - a.champion);
+  tournamentSimResult = { teams, nSims, simulatedAt: new Date().toISOString() };
+  return tournamentSimResult;
+}
+
 // ===== API FETCH =====
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
 const SPORT_KEY = 'soccer_fifa_world_cup';
@@ -965,6 +1342,7 @@ function applyOutrightEvents(events) {
   if (sum > 0) teams.forEach(t => t.prob = t.prob / sum);
   teams.sort((a, b) => b.prob - a.prob);
   outrightData = { teams, fetchedAt: new Date().toISOString() };
+  saveSnapshot();
   return teams.length;
 }
 function applyApiEvents(events) {
@@ -1210,4 +1588,9 @@ window.addEventListener('DOMContentLoaded', () => {
   } catch (e) {}
   updateApiStatusFromKey();
   renderOverview(); renderGroups(); renderSpecials();
+
+  // Service Worker registrieren (PWA)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 });

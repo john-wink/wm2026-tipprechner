@@ -2,11 +2,25 @@
 
 Multilingual web app that aggregates odds from 40+ bookmakers for the FIFA World Cup 2026 and computes the optimal Kicktipp pick via a Poisson model. Available in German, English, French, and Spanish.
 
-- 100% client-side – API key and all data stay in the browser (localStorage)
+- **100% client-side** – API key and all data stay in the browser (localStorage)
+- **Installable PWA** – Service Worker for offline use, "Add to Home Screen" on iOS/Android
+- **Mobile-first** UI with TailwindCSS (pre-compiled, no Play CDN)
+- **Full SEO**: per-language URLs, `hreflang`, JSON-LD, OpenGraph, sitemap, robots
+- **Vercel-ready** – just `git push` and deploy
 - No database, no auth, no tracking
-- Mobile-first UI built with TailwindCSS (Play CDN)
-- Full SEO: per-language URLs, `hreflang`, JSON-LD, OpenGraph, sitemap, robots
-- Vercel-ready – just `git push` and deploy
+
+## Features
+
+- Aggregates odds from 40+ bookmakers (Pinnacle, Bet365, William Hill, …) via The Odds API
+- Removes bookmaker margin, finds optimal Kicktipp pick via expected-value maximization
+- Three aggregation methods side-by-side: Median / Mean / Pinnacle
+- **Specials tab**: Champion, semifinalists, group winners (Monte-Carlo), top scorer
+- **Full tournament simulation** (Group → R32 → R16 → QF → SF → F) with consistent probabilities
+- **Score-matrix heatmap** per match (8×8 grid, color-coded)
+- **Points forecast**: expected total points + likely range (±1σ) + best-case
+- **Snapshot history**: track odds movement between refreshes
+- **Share API**: send picks via WhatsApp / clipboard with one click
+- **Manual odds override** per match
 
 ## Live URLs (after deploy)
 
@@ -18,27 +32,47 @@ Multilingual web app that aggregates odds from 40+ bookmakers for the FIFA World
 
 ## Tech stack
 
-- **HTML/CSS/JS** – no build step
-- **TailwindCSS** via Play CDN (`cdn.tailwindcss.com`)
+- **HTML/CSS/JS** – vanilla
+- **TailwindCSS** pre-compiled (~19 KB minified) — see "Building Tailwind" below
 - **i18n.js** – translation dictionary for 4 languages + 48 team-name translations
-- **app.js** – shared engine (math, render, fetch, storage)
+- **app.js** – shared engine (math, render, fetch, storage, Monte-Carlo, share)
+- **sw.js** – Service Worker (cache-first for assets, network-only for API)
 - **The Odds API** – bookmaker odds (free tier: 500 credits/month)
+
+## Building Tailwind
+
+The repo ships with a pre-built `assets/tailwind.css`. If you change classes in HTML or `app.js`, rebuild it:
+
+```bash
+npx tailwindcss@3 -i tailwind-input.css -o assets/tailwind.css --content "./**/*.html,./assets/app.js" --minify
+```
+
+Where `tailwind-input.css` contains:
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+You can also set up GitHub Actions to auto-build on push — example workflow in `.github/workflows/`.
 
 ## Project structure
 
 ```
 /
 ├── index.html              # Root: language picker + auto-redirect
-├── de/index.html           # German (SEO meta + lang switcher active state)
-├── en/index.html           # English
-├── fr/index.html           # French
-├── es/index.html           # Spanish
+├── de/ en/ fr/ es/         # Per-language HTML wrappers (SEO meta)
 ├── assets/
-│   ├── styles.css          # Minimal custom CSS (Tailwind covers the rest)
-│   ├── i18n.js             # Translations: UI strings + team names per language
-│   └── app.js              # Shared app engine
+│   ├── app.js              # Shared engine (math, render, fetch, simulation)
+│   ├── i18n.js             # Translations (4 langs + 48 team names)
+│   ├── styles.css          # Minimal custom CSS
+│   └── tailwind.css        # Pre-compiled Tailwind (~19 KB)
+├── sw.js                   # Service Worker (PWA offline cache)
+├── manifest.webmanifest    # PWA manifest
 ├── favicon.svg
-├── og-image.svg            # 1200×630 OpenGraph card
+├── icon-192.svg            # PWA icons
+├── icon-512.svg
+├── og-image.svg            # OpenGraph card (1200×630)
 ├── robots.txt
 ├── sitemap.xml
 ├── vercel.json             # Headers, cache rules, redirects

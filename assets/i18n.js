@@ -120,6 +120,31 @@ const I18N = {
     specialsLoadOutright: "Outright laden",
     outrightLoaded: "{n} Teams in Outright geladen",
 
+    // Forecast / Punkte-Prognose
+    sectionForecast: "Punkte-Prognose & Sharing",
+    forecastExpected: "Erwartete Punkte",
+    forecastUnitPts: "Σ EP",
+    forecastRange: "Wahrscheinliche Spanne",
+    forecastBestCase: "Maximum",
+    forecastWorstCase: "Minimum",
+    forecastIfAllWrong: "wenn alles falsch",
+    runFullSim: "Volle Turnier-Simulation",
+    sourceFromSim: "aus {n} Simulationen",
+    sourceFromOutright: "aus Outright-Quoten",
+    vsLast: "vs. letzter Stand",
+
+    // Detail: Heatmap
+    detailHeatmap: "Score-Heatmap",
+
+    // Share
+    shareBtn: "Tipps teilen",
+    shareHeader: "Meine WM 2026 Kicktipps",
+    shareChampionLine: "Weltmeister-Tipp: {team} ({p}%)",
+    toastShared: "Geteilt",
+    toastCopied: "In Zwischenablage kopiert",
+    toastShareFail: "Teilen fehlgeschlagen",
+    toastSimDone: "Simulation abgeschlossen",
+
     // Footer
     footerText: "Open Source · 100% client-side · keine Tracker · Quoten von <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
   },
@@ -233,6 +258,28 @@ const I18N = {
     specialsLoadOutright: "Load outright",
     outrightLoaded: "{n} teams loaded in outright",
 
+    sectionForecast: "Points forecast & sharing",
+    forecastExpected: "Expected points",
+    forecastUnitPts: "Σ EV",
+    forecastRange: "Likely range",
+    forecastBestCase: "Maximum",
+    forecastWorstCase: "Minimum",
+    forecastIfAllWrong: "if all wrong",
+    runFullSim: "Full tournament simulation",
+    sourceFromSim: "from {n} simulations",
+    sourceFromOutright: "from outright odds",
+    vsLast: "vs last snapshot",
+
+    detailHeatmap: "Score heatmap",
+
+    shareBtn: "Share picks",
+    shareHeader: "My World Cup 2026 picks",
+    shareChampionLine: "Champion pick: {team} ({p}%)",
+    toastShared: "Shared",
+    toastCopied: "Copied to clipboard",
+    toastShareFail: "Share failed",
+    toastSimDone: "Simulation complete",
+
     footerText: "Open source · 100% client-side · no trackers · odds via <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
   },
 
@@ -345,6 +392,28 @@ const I18N = {
     specialsLoadOutright: "Charger outright",
     outrightLoaded: "{n} équipes chargées en outright",
 
+    sectionForecast: "Prévision de points & partage",
+    forecastExpected: "Points attendus",
+    forecastUnitPts: "Σ EV",
+    forecastRange: "Plage probable",
+    forecastBestCase: "Maximum",
+    forecastWorstCase: "Minimum",
+    forecastIfAllWrong: "si tout faux",
+    runFullSim: "Simulation complète du tournoi",
+    sourceFromSim: "sur {n} simulations",
+    sourceFromOutright: "depuis les cotes outright",
+    vsLast: "vs dernier instantané",
+
+    detailHeatmap: "Carte de chaleur des scores",
+
+    shareBtn: "Partager mes pronostics",
+    shareHeader: "Mes pronostics Coupe du Monde 2026",
+    shareChampionLine: "Champion: {team} ({p}%)",
+    toastShared: "Partagé",
+    toastCopied: "Copié dans le presse-papiers",
+    toastShareFail: "Échec du partage",
+    toastSimDone: "Simulation terminée",
+
     footerText: "Open source · 100% côté client · sans tracker · cotes via <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
   },
 
@@ -456,6 +525,28 @@ const I18N = {
     hideAlternatives: "Ocultar alternativas",
     specialsLoadOutright: "Cargar outright",
     outrightLoaded: "{n} equipos cargados en outright",
+
+    sectionForecast: "Pronóstico de puntos & compartir",
+    forecastExpected: "Puntos esperados",
+    forecastUnitPts: "Σ EV",
+    forecastRange: "Rango probable",
+    forecastBestCase: "Máximo",
+    forecastWorstCase: "Mínimo",
+    forecastIfAllWrong: "si todo falla",
+    runFullSim: "Simulación completa del torneo",
+    sourceFromSim: "de {n} simulaciones",
+    sourceFromOutright: "de cuotas outright",
+    vsLast: "vs última instantánea",
+
+    detailHeatmap: "Mapa de calor de marcadores",
+
+    shareBtn: "Compartir pronósticos",
+    shareHeader: "Mis pronósticos Mundial 2026",
+    shareChampionLine: "Pronóstico campeón: {team} ({p}%)",
+    toastShared: "Compartido",
+    toastCopied: "Copiado al portapapeles",
+    toastShareFail: "Falló compartir",
+    toastSimDone: "Simulación completada",
 
     footerText: "Open source · 100% lado cliente · sin trackers · cuotas vía <a href=\"https://the-odds-api.com\" target=\"_blank\" rel=\"noopener\">The Odds API</a>"
   }

@@ -1,0 +1,48 @@
+{
+  "name": "WM 2026 Kicktipp-Optimizer",
+  "short_name": "WM 2026 Tipps",
+  "description": "Aggregated bookmaker odds + Poisson model = optimal World Cup 2026 prediction picks. 100% client-side, multilingual, free.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#0d1117",
+  "background_color": "#0d1117",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["sports", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Overview",
+      "short_name": "Overview",
+      "url": "/en/#overview",
+      "description": "All matches and picks"
+    },
+    {
+      "name": "Specials",
+      "short_name": "Specials",
+      "url": "/en/#specials",
+      "description": "Champion, semifinalists, group winners"
+    }
+  ]
+}
