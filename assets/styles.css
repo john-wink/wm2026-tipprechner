@@ -1,0 +1,44 @@
+/* Minimal custom styles – Tailwind übernimmt den Rest */
+
+/* Pulse animation für Loading-Dot */
+@keyframes pulse-dot { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }
+.animate-pulse-dot { animation: pulse-dot 1s infinite; }
+
+/* Custom: Region-Chip "active state" via :has() (Tailwind kann das nicht direkt) */
+.region-chip:has(input:checked) {
+  background: rgba(63, 185, 80, 0.15);
+  color: #3fb950;
+  border-color: #3fb950;
+}
+.region-chip input { display: none; }
+
+/* Sort-Indicator für Tabellen-Header */
+th.sort-asc::after { content: ' ↑'; color: #3fb950; }
+th.sort-desc::after { content: ' ↓'; color: #3fb950; }
+
+/* Smooth slide-in für Detail-Panel */
+.detail-panel-enter {
+  animation: slideDown 0.2s ease-out;
+}
+@keyframes slideDown {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 1200px; }
+}
+
+/* Sichtbare Scrollbar im Bookmaker-Listen-Container */
+.bm-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.bm-scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+.bm-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* iOS-Safari: prevent zoom on input focus */
+@supports (-webkit-touch-callout: none) {
+  input[type="number"], input[type="text"], input[type="password"], select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Print-Stylesheet für saubere Ausdrucke */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; color: black; }
+}

@@ -1,0 +1,21 @@
+# Vercel
+.vercel/
+.env*.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Legacy/Backup
+_archive/
+wm2026-tipprechner.html

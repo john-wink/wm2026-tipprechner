@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-zinc-950 text-zinc-100">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>World Cup 2026 Prediction Optimizer – Bookmaker Odds Aggregator</title>
+<meta name="description" content="World Cup 2026 prediction optimizer: aggregate odds from 40+ bookmakers, find the optimal pick via Poisson model. Free, runs locally in your browser, no signup.">
+<meta name="keywords" content="World Cup 2026, FIFA, prediction, bookmaker odds, Poisson model, football tips, soccer predictions">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="author" content="World Cup 2026 Prediction Optimizer">
+
+<link rel="canonical" href="https://wm2026-tipprechner.vercel.app/en/">
+<link rel="alternate" hreflang="de" href="https://wm2026-tipprechner.vercel.app/de/">
+<link rel="alternate" hreflang="en" href="https://wm2026-tipprechner.vercel.app/en/">
+<link rel="alternate" hreflang="fr" href="https://wm2026-tipprechner.vercel.app/fr/">
+<link rel="alternate" hreflang="es" href="https://wm2026-tipprechner.vercel.app/es/">
+<link rel="alternate" hreflang="x-default" href="https://wm2026-tipprechner.vercel.app/en/">
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="de_DE">
+<meta property="og:locale:alternate" content="fr_FR">
+<meta property="og:locale:alternate" content="es_ES">
+<meta property="og:title" content="World Cup 2026 Prediction Optimizer">
+<meta property="og:description" content="Aggregate odds from 40+ bookmakers and find the optimal pick via Poisson model. Free, local, no signup.">
+<meta property="og:url" content="https://wm2026-tipprechner.vercel.app/en/">
+<meta property="og:image" content="https://wm2026-tipprechner.vercel.app/og-image.svg">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="World Cup 2026 Prediction Optimizer">
+<meta name="twitter:description" content="Optimal football pick from aggregated bookmaker odds. 100% local in your browser.">
+<meta name="twitter:image" content="https://wm2026-tipprechner.vercel.app/og-image.svg">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "World Cup 2026 Prediction Optimizer",
+  "url": "https://wm2026-tipprechner.vercel.app/en/",
+  "description": "Optimal pick for FIFA World Cup 2026 based on aggregated bookmaker odds via Poisson model.",
+  "applicationCategory": "SportsApplication",
+  "operatingSystem": "Any (Web Browser)",
+  "inLanguage": "en",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "isAccessibleForFree": true
+}
+</script>
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://api.the-odds-api.com" crossorigin>
+<link rel="stylesheet" href="/assets/styles.css">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { fontFamily: {
+    sans: ['-apple-system','BlinkMacSystemFont','Inter','Segoe UI','Roboto','sans-serif'],
+    mono: ['ui-monospace','SFMono-Regular','Menlo','Monaco','Consolas','monospace']
+  } } }
+}
+</script>
+<script>window.APP_LANG = 'en';</script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans antialiased min-h-screen">
+
+<header class="sticky top-0 z-50 bg-zinc-950/85 backdrop-blur-md border-b border-zinc-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+    <a href="/en/" class="flex items-center gap-2.5 no-underline text-inherit">
+      <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center text-lg font-bold text-white">⚽</div>
+      <div>
+        <h1 class="text-sm sm:text-base font-semibold leading-tight">World Cup 2026 Prediction Optimizer</h1>
+        <div class="text-[11px] text-zinc-400 hidden sm:block" data-i18n="brandSub"></div>
+      </div>
+    </a>
+    <div class="flex items-center gap-2 flex-wrap">
+      <nav class="flex bg-zinc-900 border border-zinc-800 rounded-md overflow-hidden text-[11px] font-semibold uppercase tracking-wider" aria-label="Select language">
+        <a href="/de/" class="px-2.5 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800" hreflang="de">DE</a>
+        <a href="/en/" class="px-2.5 py-1.5 bg-emerald-600 text-white border-l border-zinc-800" hreflang="en">EN</a>
+        <a href="/fr/" class="px-2.5 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 border-l border-zinc-800" hreflang="fr">FR</a>
+        <a href="/es/" class="px-2.5 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 border-l border-zinc-800" hreflang="es">ES</a>
+      </nav>
+      <div id="apiStatus" class="inline-flex items-center gap-2 text-xs text-zinc-400 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-full">
+        <span class="dot w-2 h-2 rounded-full bg-zinc-600"></span><span id="apiStatusText" data-i18n="apiStatusEmpty"></span>
+      </div>
+      <button id="fetchBtn" onclick="fetchAllOdds()" class="bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium min-h-[36px]" data-i18n="fetchOdds"></button>
+    </div>
+  </div>
+</header>
+
+<nav class="sticky top-[60px] z-40 bg-zinc-950/85 backdrop-blur-md border-b border-zinc-800 no-print">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 flex">
+    <button data-tab="overview" onclick="switchTab('overview')" class="text-white border-b-2 border-emerald-500 px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
+      <span data-i18n="tabOverview"></span>
+      <span class="ml-1.5 inline-block text-[11px] bg-zinc-900 px-1.5 py-0.5 rounded text-zinc-400" id="cntOverview">72</span>
+    </button>
+    <button data-tab="groups" onclick="switchTab('groups')" class="text-zinc-400 border-b-2 border-transparent px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
+      <span data-i18n="tabGroups"></span>
+      <span class="ml-1.5 inline-block text-[11px] bg-zinc-900 px-1.5 py-0.5 rounded text-zinc-400">12</span>
+    </button>
+    <button data-tab="settings" onclick="switchTab('settings')" class="text-zinc-400 border-b-2 border-transparent px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
+      <span data-i18n="tabSettings"></span>
+    </button>
+  </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-20">
+
+  <section data-tab-content="overview">
+    <h2 class="text-lg font-semibold mb-2 flex items-center gap-2.5 flex-wrap">
+      <span data-i18n="sectionAllMatches"></span>
+      <span class="bg-zinc-900 text-zinc-400 text-[11px] font-medium px-2 py-0.5 rounded" id="overviewBadge"></span>
+    </h2>
+    <p class="text-zinc-400 text-sm mb-4 max-w-3xl" data-i18n="overviewHelp"></p>
+
+    <div class="flex gap-2 items-center flex-wrap mb-3">
+      <input type="text" id="filterInput" oninput="renderOverview()"
+             class="bg-zinc-900 border border-zinc-800 text-white rounded-md px-3 py-2 text-sm min-w-[200px] flex-1 sm:flex-none sm:w-72 focus:outline-none focus:border-emerald-500"
+             data-i18n-placeholder="filterPlaceholder">
+      <button onclick="clearExpanded()" class="text-zinc-400 hover:text-white text-xs px-2.5 py-1.5 hover:bg-zinc-900 rounded" data-i18n="collapseAll"></button>
+      <button onclick="exportCSV()" class="text-zinc-400 hover:text-white text-xs px-2.5 py-1.5 hover:bg-zinc-900 rounded" data-i18n="exportCsv"></button>
+    </div>
+
+    <div id="matchList"></div>
+  </section>
+
+  <section data-tab-content="groups" class="hidden">
+    <h2 class="text-lg font-semibold mb-2 flex items-center gap-2.5 flex-wrap">
+      <span data-i18n="sectionGroupStandings"></span>
+      <span class="bg-zinc-900 text-zinc-400 text-[11px] font-medium px-2 py-0.5 rounded" data-i18n="groupBadge"></span>
+    </h2>
+    <p class="text-zinc-400 text-sm mb-4 max-w-3xl">
+      <span data-i18n="groupHelp"></span>
+      <span class="text-emerald-400">●</span> <span data-i18n="groupQual1"></span> ·
+      <span class="text-blue-400">●</span> <span data-i18n="groupQual2"></span> ·
+      <span class="text-amber-400">●</span> <span data-i18n="groupQual3"></span>.
+    </p>
+    <div id="groupsGrid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+  </section>
+
+  <section data-tab-content="settings" class="hidden">
+    <h2 class="text-lg font-semibold mb-4" data-i18n="sectionSettings"></h2>
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-6 max-w-3xl">
+
+      <h3 class="text-xs uppercase tracking-wider text-zinc-400 font-semibold pb-2 mb-3 border-b border-zinc-800" data-i18n="settingsApiSection"></h3>
+      <div class="grid sm:grid-cols-[200px,1fr] gap-3 items-center mb-3">
+        <label class="text-sm text-zinc-400" for="apiKey" data-i18n="settingsApiKey"></label>
+        <input type="password" id="apiKey" autocomplete="off"
+               class="bg-zinc-950 border border-zinc-800 text-white rounded-md px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-emerald-500 w-full max-w-md"
+               data-i18n-placeholder="settingsApiKeyPlaceholder">
+      </div>
+      <div class="grid sm:grid-cols-[200px,1fr] gap-3 items-center mb-3">
+        <label class="text-sm text-zinc-400" data-i18n="settingsRegions"></label>
+        <div class="flex gap-2 flex-wrap">
+          <label class="region-chip cursor-pointer inline-flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 px-3 py-1.5 rounded-full text-xs text-zinc-400"><input type="checkbox" id="regEu" checked>EU</label>
+          <label class="region-chip cursor-pointer inline-flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 px-3 py-1.5 rounded-full text-xs text-zinc-400"><input type="checkbox" id="regUk" checked>UK</label>
+          <label class="region-chip cursor-pointer inline-flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 px-3 py-1.5 rounded-full text-xs text-zinc-400"><input type="checkbox" id="regUs" checked>US</label>
+          <label class="region-chip cursor-pointer inline-flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 px-3 py-1.5 rounded-full text-xs text-zinc-400"><input type="checkbox" id="regAu" checked>AU</label>
+        </div>
+      </div>
+      <div class="grid sm:grid-cols-[200px,1fr] gap-3 items-center mb-4">
+        <label class="text-sm text-zinc-400" for="defaultAgg" data-i18n="settingsAgg"></label>
+        <select id="defaultAgg" class="bg-zinc-950 border border-zinc-800 text-white rounded-md px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-emerald-500 w-full max-w-md">
+          <option value="median" data-i18n="aggMedian"></option>
+          <option value="mean" data-i18n="aggMean"></option>
+          <option value="pinnacle" data-i18n="aggPinnacle"></option>
+        </select>
+      </div>
+      <div class="bg-blue-500/10 border-l-3 border-blue-500 text-xs text-zinc-300 px-3 py-2.5 rounded-r-md mb-5" style="border-left-width:3px" data-i18n="privacyNote" data-i18n-html="1"></div>
+
+      <h3 class="text-xs uppercase tracking-wider text-zinc-400 font-semibold pb-2 mb-3 border-b border-zinc-800" data-i18n="settingsKicktipp"></h3>
+      <div class="grid sm:grid-cols-[200px,1fr] gap-3 items-center mb-2">
+        <label class="text-sm text-zinc-400" for="ptsExact" data-i18n="settingsPtsExact"></label>
+        <input type="number" id="ptsExact" value="4" step="1" min="0" class="bg-zinc-950 border border-zinc-800 text-white rounded-md px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-emerald-500 w-24">
+      </div>
+      <div class="grid sm:grid-cols-[200px,1fr] gap-3 items-center mb-2">
+        <label class="text-sm text-zinc-400" for="ptsDiff" data-i18n="settingsPtsDiff"></label>
+        <input type="number" id="ptsDiff" value="3" step="1" min="0" class="bg-zinc-950 border border-zinc-800 text-white rounded-md px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-emerald-500 w-24">
+      </div>
+      <div class="grid sm:grid-cols-[200px,1fr] gap-3 items-center mb-5">
+        <label class="text-sm text-zinc-400" for="ptsTend" data-i18n="settingsPtsTend"></label>
+        <input type="number" id="ptsTend" value="2" step="1" min="0" class="bg-zinc-950 border border-zinc-800 text-white rounded-md px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-emerald-500 w-24">
+      </div>
+
+      <h3 class="text-xs uppercase tracking-wider text-zinc-400 font-semibold pb-2 mb-3 border-b border-zinc-800" data-i18n="settingsModel"></h3>
+      <div class="grid sm:grid-cols-[200px,1fr] gap-3 items-center mb-5">
+        <label class="text-sm text-zinc-400" for="maxGoals" data-i18n="settingsMaxGoals"></label>
+        <input type="number" id="maxGoals" value="7" step="1" min="3" max="10" class="bg-zinc-950 border border-zinc-800 text-white rounded-md px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-emerald-500 w-24">
+      </div>
+
+      <div class="flex gap-2 flex-wrap pt-4 border-t border-zinc-800">
+        <button onclick="saveState()" class="bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 px-4 py-2 rounded-md text-sm font-medium min-h-[40px]" data-i18n="settingsSave"></button>
+        <button onclick="loadState()" class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 px-4 py-2 rounded-md text-sm font-medium min-h-[40px]" data-i18n="settingsLoad"></button>
+        <button onclick="clearAll()" class="ml-auto text-red-400 hover:text-red-300 px-4 py-2 rounded-md text-sm font-medium min-h-[40px]" data-i18n="settingsReset"></button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="text-center text-zinc-500 text-xs py-8 mt-16 border-t border-zinc-800">
+    <p data-i18n="footerText" data-i18n-html="1"></p>
+  </footer>
+</main>
+
+<div id="toast" class="fixed bottom-4 right-4 left-4 sm:left-auto z-[200] bg-zinc-900 border border-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-xl text-sm opacity-0 pointer-events-none transition-all"></div>
+
+<script src="/assets/i18n.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-zinc-950 text-zinc-100">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d1117">
+<title>World Cup 2026 Prediction Optimizer – Choose Language</title>
+<meta name="description" content="World Cup 2026 prediction optimizer. Aggregate odds from 40+ bookmakers, find optimal picks via Poisson model. Available in German, English, French and Spanish.">
+<meta name="robots" content="index,follow">
+
+<link rel="canonical" href="https://wm2026-tipprechner.vercel.app/">
+<link rel="alternate" hreflang="de" href="https://wm2026-tipprechner.vercel.app/de/">
+<link rel="alternate" hreflang="en" href="https://wm2026-tipprechner.vercel.app/en/">
+<link rel="alternate" hreflang="fr" href="https://wm2026-tipprechner.vercel.app/fr/">
+<link rel="alternate" hreflang="es" href="https://wm2026-tipprechner.vercel.app/es/">
+<link rel="alternate" hreflang="x-default" href="https://wm2026-tipprechner.vercel.app/en/">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="World Cup 2026 Prediction Optimizer">
+<meta property="og:description" content="Aggregate odds from 40+ bookmakers. Available in DE, EN, FR, ES. 100% client-side.">
+<meta property="og:url" content="https://wm2026-tipprechner.vercel.app/">
+<meta property="og:image" content="https://wm2026-tipprechner.vercel.app/og-image.svg">
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<script>
+// Sofortiger Browser-Sprach-Redirect für unterstützte Sprachen.
+// Falls Nutzer eine spezifische /de/ /en/ /fr/ /es/ URL bereits aufruft, kommt diese Datei nicht zum Einsatz.
+(function() {
+  try {
+    const supported = ['de', 'en', 'fr', 'es'];
+    // Check ?lang= override first
+    const params = new URLSearchParams(location.search);
+    let pick = params.get('lang');
+    if (!pick) {
+      // localStorage Präferenz
+      try { pick = localStorage.getItem('wm2026-lang'); } catch (e) {}
+    }
+    if (!pick) {
+      // Browser-Sprache
+      const navLang = (navigator.languages?.[0] || navigator.language || 'en').toLowerCase().slice(0, 2);
+      pick = navLang;
+    }
+    if (!supported.includes(pick)) pick = 'en';
+    // Nur redirecten wenn JS verfügbar und kein "no-redirect"-Flag
+    if (!params.has('noredirect')) {
+      location.replace('/' + pick + '/');
+    }
+  } catch (e) { /* fallback: zeige Auswahl */ }
+})();
+</script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans antialiased min-h-screen flex items-center justify-center p-4">
+
+<noscript>
+  <style>.requires-js{display:none}</style>
+</noscript>
+
+<main class="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 sm:p-10 max-w-md w-full text-center">
+  <div class="w-16 h-16 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-5">⚽</div>
+  <h1 class="text-xl sm:text-2xl font-semibold mb-2">World Cup 2026 Prediction Optimizer</h1>
+  <p class="text-zinc-400 text-sm mb-7">Choose your language · Sprache wählen · Choisir la langue · Elegir idioma</p>
+
+  <div class="grid grid-cols-2 gap-2.5">
+    <a href="/de/" hreflang="de" class="flex items-center gap-3 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-600 rounded-lg text-zinc-100 transition-colors no-underline">
+      <span class="text-xl">🇩🇪</span>
+      <div class="text-left">
+        <div class="font-medium text-sm">Deutsch</div>
+        <div class="text-xs text-zinc-500">DE</div>
+      </div>
+    </a>
+    <a href="/en/" hreflang="en" class="flex items-center gap-3 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-600 rounded-lg text-zinc-100 transition-colors no-underline">
+      <span class="text-xl">🇬🇧</span>
+      <div class="text-left">
+        <div class="font-medium text-sm">English</div>
+        <div class="text-xs text-zinc-500">EN</div>
+      </div>
+    </a>
+    <a href="/fr/" hreflang="fr" class="flex items-center gap-3 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-600 rounded-lg text-zinc-100 transition-colors no-underline">
+      <span class="text-xl">🇫🇷</span>
+      <div class="text-left">
+        <div class="font-medium text-sm">Français</div>
+        <div class="text-xs text-zinc-500">FR</div>
+      </div>
+    </a>
+    <a href="/es/" hreflang="es" class="flex items-center gap-3 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-600 rounded-lg text-zinc-100 transition-colors no-underline">
+      <span class="text-xl">🇪🇸</span>
+      <div class="text-left">
+        <div class="font-medium text-sm">Español</div>
+        <div class="text-xs text-zinc-500">ES</div>
+      </div>
+    </a>
+  </div>
+
+  <p class="text-zinc-600 text-xs mt-7">100% client-side · no signup · no tracking</p>
+</main>
+
+</body>
+</html>

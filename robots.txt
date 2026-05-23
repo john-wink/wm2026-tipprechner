@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wm2026-tipprechner.vercel.app/sitemap.xml
