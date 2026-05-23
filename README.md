@@ -56,6 +56,39 @@ Where `tailwind-input.css` contains:
 
 You can also set up GitHub Actions to auto-build on push — example workflow in `.github/workflows/`.
 
+## Updates ausspielen — Asset-Versioning
+
+Damit User immer die neuesten Übersetzungen / JS-Änderungen bekommen (statt veralteten Browser-Cache zu sehen), nutzt das Projekt **versionierte Asset-URLs** wie `/assets/app.js?v=v2026.05.23.3`.
+
+**Workflow nach jeder Code-Änderung:**
+
+```bash
+# 1) Optional: Tailwind neu bauen wenn du Klassen geändert hast
+npx tailwindcss@3 -i tailwind-input.css -o assets/tailwind.css --content "./**/*.html,./assets/app.js" --minify
+
+# 2) Version bumpen — patcht alle HTMLs und sw.js synchron
+python3 scripts/bump.py
+
+# 3) Commit und push
+git add -A && git commit -m "Update content" && git push
+```
+
+Vercel deployed automatisch. Sobald ein User die Seite besucht:
+
+1. Der Browser holt die neue HTML (Header `must-revalidate`, also kein Stale-Cache)
+2. Die HTML referenziert `/assets/app.js?v=NEU` — der Browser muss diese neue URL holen
+3. Der Service Worker sieht seine neue VERSION-Konstante → löscht den alten Cache → baut frischen Cache auf
+4. Beim Controller-Wechsel reloaded die Seite einmal automatisch → User sieht die neuste Version
+
+**Caching-Strategie der HTTP-Header (`vercel.json`):**
+- HTMLs (`/`, `/de/`, `/en/`, …): `max-age=0, must-revalidate` → immer frisch
+- `sw.js`: `max-age=0, must-revalidate` → Updates kommen sofort an
+- `manifest.webmanifest`: 1 h Cache
+- Versionierte Assets (`/assets/*`): 1 Jahr `immutable` → können forever gecacht werden, weil URL bei Änderung wechselt
+- SVG/PNG-Bilder: 1 Woche
+
+Das ist die Industrie-Standard-Caching-Strategie für Static Sites mit Versioning.
+
 ## Project structure
 
 ```

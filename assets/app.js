@@ -1590,7 +1590,41 @@ window.addEventListener('DOMContentLoaded', () => {
   renderOverview(); renderGroups(); renderSpecials();
 
   // Service Worker registrieren (PWA)
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
+  registerServiceWorker();
 });
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+
+    // Update-Check beim Page-Load
+    reg.update().catch(() => {});
+
+    // Falls schon ein neuer SW wartet, ihn aktivieren
+    if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+
+    // Wenn ein Update gefunden wird, automatisch übernehmen
+    reg.addEventListener('updatefound', () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener('statechange', () => {
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+          // Neuer SW installiert während alter noch läuft → übernehmen
+          sw.postMessage('SKIP_WAITING');
+        }
+      });
+    });
+
+    // Beim Controller-Wechsel die Seite neu laden für frischen State
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+  } catch (e) {
+    // Stillen Fehler – Tool funktioniert auch ohne SW
+    console.warn('Service Worker registration failed:', e);
+  }
+}
