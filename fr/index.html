@@ -98,6 +98,9 @@ tailwind.config = {
       <span data-i18n="tabGroups"></span>
       <span class="ml-1.5 inline-block text-[11px] bg-zinc-900 px-1.5 py-0.5 rounded text-zinc-400">12</span>
     </button>
+    <button data-tab="specials" onclick="switchTab('specials')" class="text-zinc-400 border-b-2 border-transparent px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
+      <span data-i18n="tabSpecials"></span>
+    </button>
     <button data-tab="settings" onclick="switchTab('settings')" class="text-zinc-400 border-b-2 border-transparent px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
       <span data-i18n="tabSettings"></span>
     </button>
@@ -136,6 +139,14 @@ tailwind.config = {
       <span class="text-amber-400">●</span> <span data-i18n="groupQual3"></span>.
     </p>
     <div id="groupsGrid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+  </section>
+
+  <section data-tab-content="specials" class="hidden">
+    <h2 class="text-lg font-semibold mb-2 flex items-center gap-2.5 flex-wrap">
+      <span data-i18n="sectionSpecials"></span>
+    </h2>
+    <p class="text-zinc-400 text-sm mb-4 max-w-3xl" data-i18n="specialsHelp" data-i18n-html="1"></p>
+    <div id="specialsContainer"></div>
   </section>
 
   <section data-tab-content="settings" class="hidden">

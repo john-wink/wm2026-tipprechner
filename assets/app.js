@@ -229,6 +229,171 @@ function computeAllAggTips(m, settings) {
   return out;
 }
 
+// ===== RENDER: SPECIALS =====
+function renderSpecials() {
+  const root = document.getElementById('specialsContainer');
+  if (!root) return;
+  const settings = getSettings();
+  const sections = [];
+
+  // 1) WELTMEISTER
+  sections.push(renderChampionSection());
+  // 2) HALBFINALISTEN (4 Teams)
+  sections.push(renderSemifinalistsSection());
+  // 3) GRUPPENSIEGER (12 Gruppen)
+  sections.push(renderGroupWinnersSection(settings));
+  // 4) TOP-TORSCHÜTZE
+  sections.push(renderTopScorerSection());
+
+  root.innerHTML = sections.join('');
+}
+
+function renderChampionSection() {
+  if (!outrightData || !outrightData.teams.length) {
+    return wrapSection(t('specialChampion'), `<p class="text-zinc-500 text-sm">${t('noOutrightYet')}</p>`);
+  }
+  const top = outrightData.teams[0];
+  const rest = outrightData.teams.slice(1, 8);
+  return wrapSection(t('specialChampion'),
+    `<div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+       <div class="flex-1">
+         <div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">${t('topPickShort')}</div>
+         <div class="flex items-baseline gap-3">
+           <div class="text-2xl sm:text-3xl font-semibold text-emerald-400">${top.label}</div>
+           <div class="font-mono text-base text-zinc-300">${(top.prob*100).toFixed(1)}%</div>
+         </div>
+       </div>
+     </div>
+     <details class="mt-3">
+       <summary class="cursor-pointer text-xs text-blue-400 hover:text-blue-300">${t('showAlternatives')}</summary>
+       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mt-3">
+         ${rest.map(team => probRow(team)).join('')}
+       </div>
+     </details>`
+  );
+}
+
+function renderSemifinalistsSection() {
+  if (!outrightData || !outrightData.teams.length) {
+    return wrapSection(t('specialSemifinalists'), `<p class="text-zinc-500 text-sm">${t('noOutrightYet')}</p>`);
+  }
+  const top4 = outrightData.teams.slice(0, 4);
+  return wrapSection(t('specialSemifinalists'),
+    `<div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">${t('topPickShort')}</div>
+     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+       ${top4.map((team, i) => `
+         <div class="bg-emerald-500/10 border border-emerald-600 rounded-md p-3 text-center">
+           <div class="text-xs text-emerald-400 font-semibold">#${i+1}</div>
+           <div class="text-sm font-medium text-white mt-1 truncate" title="${team.label}">${team.label}</div>
+           <div class="text-[11px] font-mono text-zinc-400 mt-0.5">${(team.prob*100).toFixed(1)}%</div>
+         </div>
+       `).join('')}
+     </div>
+     <p class="text-[11px] text-zinc-500 italic">${t('semifinalistsNote')}</p>`
+  );
+}
+
+function renderGroupWinnersSection(settings) {
+  const cards = Object.keys(GROUPS).map(g => {
+    const sim = simulateGroupWinners(g, settings, 5000);
+    if (!sim) {
+      return `<div class="bg-zinc-900 border border-zinc-800 rounded-md p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold">${t('groupName')} ${g}</span>
+          <span class="text-[10px] text-zinc-500">${t('noGroupOddsYet')}</span>
+        </div>
+      </div>`;
+    }
+    const teams = GROUPS[g].teams.map((tKey, i) => ({
+      key: tKey,
+      label: teamLabel(tKey),
+      flag: GROUPS[g].flags[i],
+      prob: sim.winProbs[i]
+    })).sort((a, b) => b.prob - a.prob);
+    const top = teams[0];
+    const rest = teams.slice(1);
+    return `
+      <div class="bg-zinc-900 border border-emerald-600/40 rounded-md p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold">${t('groupName')} ${g}</span>
+          <span class="text-[10px] text-zinc-500 font-mono">${(top.prob*100).toFixed(0)}%</span>
+        </div>
+        <div class="text-base font-semibold text-emerald-400 truncate" title="${top.label}">${top.flag} ${top.label}</div>
+        <details class="mt-2">
+          <summary class="cursor-pointer text-[11px] text-blue-400 hover:text-blue-300">${t('showAlternatives')}</summary>
+          <div class="mt-2 space-y-1">
+            ${rest.map(team => `<div class="flex justify-between text-xs">
+              <span class="text-zinc-400 truncate">${team.flag} ${team.label}</span>
+              <span class="text-zinc-500 font-mono">${(team.prob*100).toFixed(0)}%</span>
+            </div>`).join('')}
+          </div>
+        </details>
+      </div>
+    `;
+  }).join('');
+  return wrapSection(t('specialGroupWinners'),
+    `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">${cards}</div>`
+  );
+}
+
+function renderTopScorerSection() {
+  const override = topScorerOverride;
+  let pickKey, pickLabel, pickProb;
+  if (override) {
+    pickKey = override; pickLabel = teamLabel(override); pickProb = null;
+  } else if (outrightData && outrightData.teams.length > 0) {
+    pickKey = outrightData.teams[0].key;
+    pickLabel = outrightData.teams[0].label;
+    pickProb = outrightData.teams[0].prob;
+  } else {
+    return wrapSection(t('specialTopScorer'),
+      `<p class="text-zinc-500 text-sm mb-3">${t('noOutrightYet')}</p>
+       ${renderTopScorerOverrideInput()}`);
+  }
+  const probStr = pickProb !== null ? ` <span class="text-zinc-400 font-mono text-sm">${(pickProb*100).toFixed(1)}%</span>` : ` <span class="text-zinc-500 text-xs">(${t('manualOverride')})</span>`;
+  return wrapSection(t('specialTopScorer'),
+    `<div class="mb-3">
+       <div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">${t('topPickShort')}</div>
+       <div class="text-2xl sm:text-3xl font-semibold text-emerald-400">${pickLabel}${probStr}</div>
+     </div>
+     <p class="text-[11px] text-zinc-500 italic mb-3">${t('topScorerNote')}</p>
+     ${renderTopScorerOverrideInput()}`
+  );
+}
+
+function renderTopScorerOverrideInput() {
+  const allTeams = Object.keys(TEAM_LABELS).sort((a, b) => teamLabel(a).localeCompare(teamLabel(b)));
+  return `
+    <label class="block text-[11px] text-zinc-500 mb-1">${t('manualOverride')}</label>
+    <select onchange="setTopScorerOverride(this.value)" class="bg-zinc-950 border border-zinc-800 text-white rounded-md px-3 py-2 text-base sm:text-sm w-full max-w-xs focus:outline-none focus:border-emerald-500">
+      <option value="">—</option>
+      ${allTeams.map(k => `<option value="${k}" ${k === topScorerOverride ? 'selected' : ''}>${teamLabel(k)}</option>`).join('')}
+    </select>
+  `;
+}
+
+function setTopScorerOverride(val) {
+  topScorerOverride = val || '';
+  renderSpecials();
+  saveState(true);
+}
+
+function wrapSection(title, body) {
+  return `
+    <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 mb-4">
+      <h3 class="text-base font-semibold text-white mb-3">${title}</h3>
+      ${body}
+    </section>
+  `;
+}
+
+function probRow(team) {
+  return `<div class="flex justify-between items-center bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5">
+    <span class="text-sm text-zinc-200 truncate" title="${team.label}">${team.label}</span>
+    <span class="text-xs font-mono text-zinc-400 ml-2">${(team.prob*100).toFixed(1)}%</span>
+  </div>`;
+}
+
 // ===== TABS =====
 function switchTab(tab) {
   document.querySelectorAll('[data-tab]').forEach(b => {
@@ -243,6 +408,7 @@ function switchTab(tab) {
   });
   if (tab === 'overview') renderOverview();
   if (tab === 'groups') renderGroups();
+  if (tab === 'specials') renderSpecials();
   // scroll to top of content
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -588,9 +754,91 @@ function renderGroupCard(g, settings) {
   `;
 }
 
+// ===== SPECIALS: Outright-Daten & Monte-Carlo =====
+// outrightData = { teams: [{key, label, prob}, ...] } — sortiert nach prob desc
+let outrightData = null;
+// Cache für simulierte Gruppen-Resultate (key = group letter)
+let groupSimCache = {};
+// Manueller Override für Top-Torschütze (Team-Key oder '')
+let topScorerOverride = '';
+
+function clearGroupSimCache() { groupSimCache = {}; }
+
+// Sample (i,j) aus einer Score-Matrix gegen uniform random
+function sampleScore(matrix) {
+  const r = Math.random();
+  let cum = 0;
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[i].length; j++) {
+      cum += matrix[i][j];
+      if (r <= cum) return [i, j];
+    }
+  }
+  // Falls die Matrix nicht ganz 1.0 summiert (numerische Reste), nimm letzte Zelle
+  return [matrix.length - 1, matrix.length - 1];
+}
+
+// Monte-Carlo: Wer wird Gruppensieger? Liefert für jedes der 4 Teams die Wkt.
+function simulateGroupWinners(g, settings, nSims = 10000) {
+  // Cache
+  const cacheKey = `${g}|${activeAggMethod({ aggOverride: null })}|${settings.exact}|${settings.diff}|${settings.tend}|${settings.maxGoals}`;
+  if (groupSimCache[cacheKey]) return groupSimCache[cacheKey];
+
+  const teams = GROUPS[g].teams;
+  const matches = Object.values(matchData).filter(m => m.group === g);
+  // Pre-compute Score-Matrizen aller Spiele
+  const matchInfos = matches.map(m => {
+    const r = computeMatch(m, settings);
+    return r ? { homeIdx: m.homeIdx, awayIdx: m.awayIdx, matrix: r.matrix } : null;
+  });
+  // Wenn ein Spiel keine Daten hat, abbrechen
+  if (matchInfos.some(mi => !mi)) {
+    groupSimCache[cacheKey] = null;
+    return null;
+  }
+
+  const winCount = [0, 0, 0, 0];
+  const placeCount = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+
+  for (let sim = 0; sim < nSims; sim++) {
+    const st = [
+      { idx: 0, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
+      { idx: 1, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
+      { idx: 2, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() },
+      { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: Math.random() }
+    ];
+    for (const mi of matchInfos) {
+      const [hg, ag] = sampleScore(mi.matrix);
+      st[mi.homeIdx].gf += hg; st[mi.homeIdx].ga += ag;
+      st[mi.awayIdx].gf += ag; st[mi.awayIdx].ga += hg;
+      if (hg > ag) st[mi.homeIdx].pts += 3;
+      else if (hg < ag) st[mi.awayIdx].pts += 3;
+      else { st[mi.homeIdx].pts += 1; st[mi.awayIdx].pts += 1; }
+    }
+    // Sortiere wie FIFA (Pts → GD → GF → Tiebreak)
+    st.sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || a.tiebreak - b.tiebreak);
+    winCount[st[0].idx]++;
+    for (let pos = 0; pos < 4; pos++) placeCount[pos][st[pos].idx]++;
+  }
+
+  const result = {
+    winProbs: winCount.map(c => c / nSims),
+    placeProbs: placeCount.map(row => row.map(c => c / nSims))
+  };
+  groupSimCache[cacheKey] = result;
+  return result;
+}
+
+// Top-N nach Outright-Wkt (für Halbfinalisten und Top-Torschütze)
+function getTopOutright(n = 4) {
+  if (!outrightData || !outrightData.teams) return [];
+  return outrightData.teams.slice(0, n);
+}
+
 // ===== API FETCH =====
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
 const SPORT_KEY = 'soccer_fifa_world_cup';
+const SPORT_KEY_OUTRIGHT = 'soccer_fifa_world_cup_winner';
 
 function getSelectedRegions() {
   const regions = [];
@@ -637,26 +885,87 @@ async function fetchAllOdds() {
   setApiStatus('busy', t('apiStatusLoading', { n: regions.length, plural: regions.length > 1 ? 's' : '' }));
 
   try {
-    const url = `${ODDS_API_BASE}/sports/${SPORT_KEY}/odds?apiKey=${encodeURIComponent(key)}&regions=${regions.join(',')}&markets=h2h&oddsFormat=decimal`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const txt = await res.text(); let msg = `HTTP ${res.status}`;
+    // Beide Endpoints parallel: matches (h2h) + outright (Weltmeister)
+    // Outright nur mit 1 Region (EU) um Credits zu sparen — Outright-Quoten unterscheiden sich kaum nach Region
+    const matchUrl = `${ODDS_API_BASE}/sports/${SPORT_KEY}/odds?apiKey=${encodeURIComponent(key)}&regions=${regions.join(',')}&markets=h2h&oddsFormat=decimal`;
+    const outRegion = regions.includes('eu') ? 'eu' : regions[0];
+    const outrightUrl = `${ODDS_API_BASE}/sports/${SPORT_KEY_OUTRIGHT}/odds?apiKey=${encodeURIComponent(key)}&regions=${outRegion}&markets=outrights&oddsFormat=decimal`;
+
+    const [matchRes, outrightRes] = await Promise.allSettled([fetch(matchUrl), fetch(outrightUrl)]);
+
+    // === Matches ===
+    let stats = { matched: 0, bookmakers: 0 };
+    let remaining = null;
+    if (matchRes.status === 'fulfilled' && matchRes.value.ok) {
+      const events = await matchRes.value.json();
+      remaining = matchRes.value.headers.get('x-requests-remaining');
+      stats = applyApiEvents(events);
+      clearGroupSimCache(); // Daten geändert → Simulation neu rechnen
+    } else if (matchRes.status === 'fulfilled') {
+      const txt = await matchRes.value.text(); let msg = `HTTP ${matchRes.value.status}`;
       try { const j = JSON.parse(txt); if (j.message) msg = j.message; } catch(e){}
       throw new Error(msg);
+    } else {
+      throw new Error(matchRes.reason?.message || 'Netzwerk-Fehler (Matches)');
     }
-    const events = await res.json();
-    const remaining = res.headers.get('x-requests-remaining');
-    const stats = applyApiEvents(events);
+
+    // === Outright === (Fehler hier kein hartes Failure — Specials sind optional)
+    let outrightCount = 0;
+    if (outrightRes.status === 'fulfilled' && outrightRes.value.ok) {
+      const outrightEvents = await outrightRes.value.json();
+      outrightCount = applyOutrightEvents(outrightEvents);
+      const remainingOut = outrightRes.value.headers.get('x-requests-remaining');
+      if (remainingOut !== null) remaining = remainingOut;
+    } else {
+      console.warn('Outright odds could not be loaded — Specials werden ohne Outright-Daten dargestellt.');
+    }
+
     setApiStatus('ok', t('apiStatusLoaded', { matches: stats.matched, bms: stats.bookmakers }) + (remaining ? ` · ${remaining} credits` : ''));
-    renderOverview(); renderGroups();
+    renderOverview(); renderGroups(); renderSpecials();
     saveState(true);
-    toast(t('toastFetched', { n: stats.matched, bm: stats.bookmakers }));
+    let msg = t('toastFetched', { n: stats.matched, bm: stats.bookmakers });
+    if (outrightCount > 0) msg += ' · ' + t('outrightLoaded', { n: outrightCount });
+    toast(msg);
   } catch (e) {
     setApiStatus('err', t('apiStatusError', { msg: e.message }));
     toast(t('toastApiError', { msg: e.message }), true);
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+// Parse Outright-API Antwort und mappe auf interne Team-Keys
+function applyOutrightEvents(events) {
+  if (!Array.isArray(events) || events.length === 0) { outrightData = null; return 0; }
+  // Outright kommt als 1+ Event mit markets.outrights mit outcomes (Teams)
+  // Wir aggregieren über alle Buchmacher: pro Team Median der entwerteten Wkt
+  const teamRawProbs = {}; // key → [prob, prob, ...] aus mehreren Buchmachern
+  for (const ev of events) {
+    for (const bm of (ev.bookmakers || [])) {
+      const outright = (bm.markets || []).find(m => m.key === 'outrights');
+      if (!outright || !outright.outcomes) continue;
+      // Sum aller outcome-implicit-probs (= 1/odd) zum normalisieren
+      const valid = outright.outcomes.filter(o => o.price && o.price > 1);
+      if (valid.length === 0) continue;
+      const totalRaw = valid.reduce((s, o) => s + 1/o.price, 0);
+      if (totalRaw <= 0) continue;
+      for (const o of valid) {
+        const teamKey = findInternalTeam(o.name);
+        if (!teamKey) continue;
+        const prob = (1 / o.price) / totalRaw;
+        if (!teamRawProbs[teamKey]) teamRawProbs[teamKey] = [];
+        teamRawProbs[teamKey].push(prob);
+      }
+    }
+  }
+  const median = arr => { const s = [...arr].sort((a,b)=>a-b); const m = Math.floor(s.length/2); return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+  const teams = Object.entries(teamRawProbs).map(([key, probs]) => ({ key, label: teamLabel(key), prob: median(probs), nBms: probs.length }));
+  // Re-normalisieren (Median-Summe ist nicht exakt 1)
+  const sum = teams.reduce((s, t) => s + t.prob, 0);
+  if (sum > 0) teams.forEach(t => t.prob = t.prob / sum);
+  teams.sort((a, b) => b.prob - a.prob);
+  outrightData = { teams, fetchedAt: new Date().toISOString() };
+  return teams.length;
 }
 function applyApiEvents(events) {
   for (const m of Object.values(matchData)) m.bookmakerData = [];
@@ -703,7 +1012,8 @@ let _renderTimer = null;
 function scheduleRender() {
   clearTimeout(_renderTimer);
   _renderTimer = setTimeout(() => {
-    renderOverview(); renderGroups();
+    clearGroupSimCache();
+    renderOverview(); renderGroups(); renderSpecials();
     saveState(true);
   }, 250);
 }
@@ -718,6 +1028,8 @@ const STORAGE_KEY = 'wm2026-kicktipp-optimizer-v3';
 function saveState(silent) {
   const state = {
     matchData,
+    outrightData,
+    topScorerOverride,
     settings: {
       ptsExact: document.getElementById('ptsExact').value,
       ptsDiff: document.getElementById('ptsDiff').value,
@@ -753,6 +1065,9 @@ function loadState() {
         }
       }
     }
+    if (state.outrightData) outrightData = state.outrightData;
+    if (state.topScorerOverride !== undefined) topScorerOverride = state.topScorerOverride || '';
+    clearGroupSimCache();
     if (state.settings) {
       for (const [k, v] of Object.entries(state.settings)) {
         const el = document.getElementById(k);
@@ -761,13 +1076,16 @@ function loadState() {
       }
     }
     updateApiStatusFromKey();
-    renderOverview(); renderGroups();
+    renderOverview(); renderGroups(); renderSpecials();
     toast(t('toastLoaded'));
   } catch (e) { toast(t('toastLoadFail', { msg: e.message }), true); }
 }
 function clearAll() {
   if (!confirm(t('confirmReset'))) return;
   initMatches();
+  outrightData = null;
+  topScorerOverride = '';
+  clearGroupSimCache();
   document.getElementById('ptsExact').value = 4;
   document.getElementById('ptsDiff').value = 3;
   document.getElementById('ptsTend').value = 2;
@@ -778,7 +1096,7 @@ function clearAll() {
   localStorage.removeItem(STORAGE_KEY);
   expandedId = null;
   setApiStatus('', t('apiStatusEmpty'));
-  renderOverview(); renderGroups();
+  renderOverview(); renderGroups(); renderSpecials();
   toast(t('toastReset'));
 }
 function exportCSV() {
@@ -852,7 +1170,11 @@ window.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     if (!el) return;
     const evt = el.tagName === 'SELECT' ? 'change' : 'input';
-    el.addEventListener(evt, () => { renderOverview(); renderGroups(); saveState(true); });
+    el.addEventListener(evt, () => {
+      clearGroupSimCache();
+      renderOverview(); renderGroups(); renderSpecials();
+      saveState(true);
+    });
   });
   ['apiKey','regEu','regUk','regUs','regAu'].forEach(id => {
     const el = document.getElementById(id);
@@ -877,6 +1199,8 @@ window.addEventListener('DOMContentLoaded', () => {
           matchData[id].aggOverride = src.aggOverride || null;
         }
       }
+      if (state.outrightData) outrightData = state.outrightData;
+      if (state.topScorerOverride !== undefined) topScorerOverride = state.topScorerOverride || '';
       if (state.settings) for (const [k, v] of Object.entries(state.settings)) {
         const el = document.getElementById(k);
         if (!el) continue;
@@ -885,5 +1209,5 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   } catch (e) {}
   updateApiStatusFromKey();
-  renderOverview(); renderGroups();
+  renderOverview(); renderGroups(); renderSpecials();
 });
