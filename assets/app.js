@@ -319,7 +319,8 @@ function renderOverview() {
   list.innerHTML = items.map(({m, r}) => renderMatchCard(m, r, settings)).join('');
 }
 
-function renderMatchCard(m, r, settings) {
+function renderMatchCard(m, r, settings, opts = {}) {
+  const compact = !!opts.compact;
   const isExpanded = expandedId === m.id;
   const date = m.apiCommenceTime
     ? new Date(m.apiCommenceTime).toLocaleDateString(window.APP_LANG, { day:'2-digit', month:'2-digit', weekday:'short' })
@@ -332,22 +333,22 @@ function renderMatchCard(m, r, settings) {
   const source = r ? `${r.label}${(m.bookmakerData?.length) ? ' · ' + t('bmCountShort', { n: m.bookmakerData.length }) : ''}`
     : `<span class="text-zinc-600">${t('noOddsShort')}</span>`;
 
-  const expandedHTML = isExpanded ? renderDetailPanel(m, r, settings) : '';
+  const expandedHTML = isExpanded ? renderDetailPanel(m, r, settings, compact) : '';
 
   return `
     <div class="bg-zinc-900 border ${isExpanded ? 'border-emerald-600' : 'border-zinc-800'} rounded-lg mb-2 overflow-hidden transition-colors">
-      <button class="w-full text-left p-3 sm:p-4 hover:bg-zinc-800/50 active:bg-zinc-800 transition-colors min-h-[60px]"
+      <button class="w-full text-left ${compact ? 'p-2.5' : 'p-3 sm:p-4'} hover:bg-zinc-800/50 active:bg-zinc-800 transition-colors min-h-[60px]"
               onclick="toggleExpand('${m.id}')" aria-expanded="${isExpanded}">
         <div class="flex items-center gap-2 sm:gap-3">
-          <div class="text-xs text-zinc-500 w-16 sm:w-20 flex-shrink-0">
+          <div class="text-xs text-zinc-500 ${compact ? 'w-14' : 'w-16 sm:w-20'} flex-shrink-0">
             <div>${date}</div>
             <div class="text-[10px] mt-0.5">${m.id}</div>
           </div>
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 text-sm sm:text-base font-medium">
+            <div class="flex items-center gap-2 text-sm ${compact ? '' : 'sm:text-base'} font-medium">
               <span class="truncate"><span class="mr-1">${m.homeFlag}</span>${teamLabel(m.home)}</span>
             </div>
-            <div class="flex items-center gap-2 text-sm sm:text-base font-medium mt-0.5">
+            <div class="flex items-center gap-2 text-sm ${compact ? '' : 'sm:text-base'} font-medium mt-0.5">
               <span class="truncate"><span class="mr-1">${m.awayFlag}</span>${teamLabel(m.away)}</span>
             </div>
             <div class="text-[11px] text-zinc-500 mt-1.5 truncate">${source}</div>
@@ -363,13 +364,17 @@ function renderMatchCard(m, r, settings) {
   `;
 }
 
-function renderDetailPanel(m, r, settings) {
+function renderDetailPanel(m, r, settings, compact = false) {
+  // Padding & Spacing je nach Modus
+  const pad = compact ? 'p-3' : 'p-4 sm:p-5';
+  const gridCls = compact ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5';
+
   if (!r) {
     return `
-      <div class="border-t border-zinc-800 p-4 detail-panel-enter">
+      <div class="border-t border-zinc-800 ${pad} detail-panel-enter">
         <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailNoOdds')}</h4>
         <p class="text-sm text-zinc-400 mb-3">${t('detailNoOddsHelp')}</p>
-        ${renderManualOddsInput(m)}
+        ${renderManualOddsInput(m, compact)}
       </div>
     `;
   }
@@ -378,29 +383,34 @@ function renderDetailPanel(m, r, settings) {
   const pA = (r.probs.pA * 100).toFixed(0);
   const allTips = computeAllAggTips(m, settings);
 
+  // Aggregations-Karten
   let aggHTML = '';
   if (allTips && allTips.n > 0) {
     const cardFor = (method, label) => {
       const data = allTips[method];
-      if (!data) return `<div class="bg-zinc-900 border border-zinc-800 rounded-md p-2.5 opacity-40">
+      if (!data) return `<div class="bg-zinc-900 border border-zinc-800 rounded-md p-2 opacity-40">
         <div class="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold">${label}</div>
-        <div class="font-mono font-bold text-lg mt-1">–</div>
-        <div class="text-[11px] text-zinc-500 mt-0.5">n/a</div>
+        <div class="font-mono font-bold text-base mt-0.5">–</div>
+        <div class="text-[10px] text-zinc-500">n/a</div>
       </div>`;
       const isActive = r.source === method;
-      const cls = isActive
-        ? 'bg-emerald-500/10 border-emerald-600'
-        : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700';
-      return `<button class="${cls} border rounded-md p-2.5 text-left transition-colors min-h-[70px]" onclick="event.stopPropagation();setAggOverride('${m.id}','${method}')">
-        <div class="text-[10px] uppercase tracking-wide ${isActive ? 'text-emerald-400' : 'text-zinc-500'} font-semibold">${label}</div>
-        <div class="font-mono font-bold text-lg mt-1 text-white">${data.tip.h}:${data.tip.a}</div>
-        <div class="text-[11px] text-zinc-500 mt-0.5 font-mono">EV ${data.tip.ep.toFixed(2)} · xG ${data.lh.toFixed(1)}:${data.la.toFixed(1)}</div>
+      const cls = isActive ? 'bg-emerald-500/10 border-emerald-600' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700';
+      const xg = `${data.lh.toFixed(1)}:${data.la.toFixed(1)}`;
+      return `<button class="${cls} border rounded-md p-2 text-left transition-colors min-h-[64px] w-full" onclick="event.stopPropagation();setAggOverride('${m.id}','${method}')">
+        <div class="text-[10px] uppercase tracking-wide ${isActive ? 'text-emerald-400' : 'text-zinc-500'} font-semibold truncate">${label}</div>
+        <div class="font-mono font-bold ${compact ? 'text-base' : 'text-lg'} mt-0.5 text-white">${data.tip.h}:${data.tip.a}</div>
+        <div class="text-[10px] text-zinc-500 mt-0.5 font-mono truncate">EV ${data.tip.ep.toFixed(2)} · ${xg}</div>
       </button>`;
     };
+    const headlineKey = compact ? 'detailAggCompare' : 'detailAggCompare';
+    // Bei compact: kürzere Headline
+    const headline = compact
+      ? `${t('labelMedian')} · ${t('labelMean')} · ${t('labelPinnacle')} <span class="text-zinc-600">· ${allTips.n} BM</span>`
+      : t('detailAggCompare', { n: allTips.n });
     aggHTML = `
       <div>
-        <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailAggCompare', { n: allTips.n })}</h4>
-        <div class="grid grid-cols-3 gap-2">
+        <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${headline}</h4>
+        <div class="grid grid-cols-3 gap-1.5">
           ${cardFor('median', t('labelMedian'))}
           ${cardFor('mean', t('labelMean'))}
           ${cardFor('pinnacle', t('labelPinnacle'))}
@@ -410,7 +420,7 @@ function renderDetailPanel(m, r, settings) {
   }
 
   const topHTML = r.topScores.slice(0, 5).map((s, i) =>
-    `<div class="${i === 0 ? 'bg-emerald-500/10 border-emerald-600' : 'bg-zinc-900 border-zinc-800'} border rounded text-center px-2 py-1.5">
+    `<div class="${i === 0 ? 'bg-emerald-500/10 border-emerald-600' : 'bg-zinc-900 border-zinc-800'} border rounded text-center px-1.5 py-1.5">
       <div class="font-mono font-semibold ${i === 0 ? 'text-emerald-400' : 'text-zinc-200'} text-sm">${s.score}</div>
       <div class="text-[10px] text-zinc-500">${(s.p*100).toFixed(1)}%</div>
     </div>`).join('');
@@ -419,8 +429,10 @@ function renderDetailPanel(m, r, settings) {
   if (m.bookmakerData && m.bookmakerData.length > 0) {
     bmHTML = `
       <div>
-        <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailBookmakers', { n: m.bookmakerData.length })}</h4>
-        <div class="bm-scroll flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+        <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">
+          ${compact ? `BM <span class="text-zinc-600">${m.bookmakerData.length}</span>` : t('detailBookmakers', { n: m.bookmakerData.length })}
+        </h4>
+        <div class="bm-scroll flex flex-wrap gap-1 ${compact ? 'max-h-14' : 'max-h-20'} overflow-y-auto">
           ${m.bookmakerData.map(b => {
             const cls = b.key === 'pinnacle' ? 'bg-blue-500/10 text-blue-400 border-blue-500' : 'bg-zinc-900 text-zinc-400 border-zinc-800';
             return `<span class="${cls} border rounded-full px-2 py-0.5 text-[10px]" title="${b.oH}/${b.oD}/${b.oA}">${b.title}</span>`;
@@ -430,58 +442,73 @@ function renderDetailPanel(m, r, settings) {
     `;
   }
 
+  // Wahrscheinlichkeiten + xG kombiniert (kompakter)
+  const probSection = `
+    <div>
+      <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailProbHeading')}</h4>
+      <div class="flex justify-between text-[10px] text-zinc-400 mb-1 gap-1">
+        <span class="truncate">${m.homeFlag} ${pH}%</span>
+        <span class="flex-shrink-0">⊝ ${pD}%</span>
+        <span class="truncate text-right">${pA}% ${m.awayFlag}</span>
+      </div>
+      <div class="flex h-7 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800">
+        <div class="bg-emerald-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pH}%">${pH}%</div>
+        <div class="bg-zinc-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pD}%">${pD}%</div>
+        <div class="bg-blue-500 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pA}%">${pA}%</div>
+      </div>
+      <div class="mt-2 flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-md px-3 py-1.5 gap-2">
+        <span class="text-[11px] text-zinc-500 flex-shrink-0">${t('detailXG')}</span>
+        <span class="font-mono whitespace-nowrap">
+          <span class="text-emerald-400 font-semibold text-sm sm:text-base">${r.lh.toFixed(2)}</span>
+          <span class="text-zinc-600 mx-1">:</span>
+          <span class="text-emerald-400 font-semibold text-sm sm:text-base">${r.la.toFixed(2)}</span>
+        </span>
+      </div>
+    </div>
+  `;
+
+  const topSection = `
+    <div>
+      <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${compact ? 'Top 5' : t('detailTopScores')}</h4>
+      <div class="grid grid-cols-5 gap-1.5">${topHTML}</div>
+    </div>
+  `;
+
+  const manualSection = `
+    <div>
+      <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${compact ? '1 · X · 2' : t('detailManualOdds')}</h4>
+      ${renderManualOddsInput(m, compact)}
+    </div>
+  `;
+
   return `
-    <div class="border-t border-zinc-800 p-4 sm:p-5 detail-panel-enter grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-      <div>
-        <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailProbHeading')}</h4>
-        <div class="flex justify-between text-[11px] text-zinc-400 mb-1">
-          <span class="truncate">${teamLabel(m.home)} ${pH}%</span>
-          <span>${t('draw')} ${pD}%</span>
-          <span class="truncate">${teamLabel(m.away)} ${pA}%</span>
-        </div>
-        <div class="flex h-7 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800">
-          <div class="bg-emerald-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pH}%">${pH}%</div>
-          <div class="bg-zinc-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pD}%">${pD}%</div>
-          <div class="bg-blue-500 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pA}%">${pA}%</div>
-        </div>
-        <div class="mt-3 flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2">
-          <span class="text-[11px] text-zinc-500">${t('detailXG')}</span>
-          <span class="font-mono">
-            <span class="text-emerald-400 font-semibold text-base">${r.lh.toFixed(2)}</span>
-            <span class="text-zinc-600"> : </span>
-            <span class="text-emerald-400 font-semibold text-base">${r.la.toFixed(2)}</span>
-          </span>
-        </div>
-      </div>
-
+    <div class="border-t border-zinc-800 ${pad} detail-panel-enter ${gridCls}">
+      ${probSection}
       ${aggHTML}
-
-      <div>
-        <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailTopScores')}</h4>
-        <div class="grid grid-cols-5 gap-1.5">${topHTML}</div>
-      </div>
-
-      <div>
-        <h4 class="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">${t('detailManualOdds')}</h4>
-        ${renderManualOddsInput(m)}
-      </div>
-
+      ${topSection}
+      ${manualSection}
       ${bmHTML}
     </div>
   `;
 }
 
-function renderManualOddsInput(m) {
-  const inputCls = "bg-zinc-950 text-white border border-zinc-800 rounded-md px-3 py-2 text-base font-mono w-20 sm:w-24 text-center focus:outline-none focus:border-emerald-500";
+function renderManualOddsInput(m, compact = false) {
+  // Bei compact: kleinere Inputs, immer in einer Zeile, kein Wrap
+  const inputCls = compact
+    ? "bg-zinc-950 text-white border border-zinc-800 rounded-md px-1.5 py-1.5 text-sm font-mono flex-1 min-w-0 text-center focus:outline-none focus:border-emerald-500"
+    : "bg-zinc-950 text-white border border-zinc-800 rounded-md px-3 py-2 text-base font-mono w-20 sm:w-24 text-center focus:outline-none focus:border-emerald-500";
+  const wrapCls = compact
+    ? "grid grid-cols-[12px,1fr,12px,1fr,12px,1fr] gap-1.5 items-center"
+    : "flex gap-2 items-center flex-wrap";
   return `
-    <div class="flex gap-2 items-center flex-wrap" onclick="event.stopPropagation()">
-      <span class="text-xs text-zinc-500 font-semibold w-3">1</span>
+    <div class="${wrapCls}" onclick="event.stopPropagation()">
+      <span class="text-xs text-zinc-500 font-semibold text-center">1</span>
       <input type="number" inputmode="decimal" step="0.01" min="1.01" placeholder="1.85" value="${m.oddH ?? ''}" oninput="updateOdds('${m.id}','oddH',this.value)" class="${inputCls}">
-      <span class="text-xs text-zinc-500 font-semibold w-3">X</span>
+      <span class="text-xs text-zinc-500 font-semibold text-center">X</span>
       <input type="number" inputmode="decimal" step="0.01" min="1.01" placeholder="3.40" value="${m.oddD ?? ''}" oninput="updateOdds('${m.id}','oddD',this.value)" class="${inputCls}">
-      <span class="text-xs text-zinc-500 font-semibold w-3">2</span>
+      <span class="text-xs text-zinc-500 font-semibold text-center">2</span>
       <input type="number" inputmode="decimal" step="0.01" min="1.01" placeholder="4.20" value="${m.oddA ?? ''}" oninput="updateOdds('${m.id}','oddA',this.value)" class="${inputCls}">
-      ${(m.oddH || m.oddD || m.oddA) ? `<button class="text-xs text-zinc-400 hover:text-red-400 px-2 py-1.5 min-h-[36px]" onclick="clearManualOdds('${m.id}')">${t('delete')}</button>` : ''}
+      ${(m.oddH || m.oddD || m.oddA) ? `<button class="${compact ? 'col-span-6 mt-1' : ''} text-xs text-zinc-400 hover:text-red-400 px-2 py-1 min-h-[32px]" onclick="clearManualOdds('${m.id}')">${t('delete')}</button>` : ''}
     </div>
   `;
 }
@@ -534,7 +561,7 @@ function renderGroupCard(g, settings) {
   }).join('');
 
   const matches = Object.values(matchData).filter(m => m.group === g);
-  const matchCards = matches.map(m => renderMatchCard(m, computeMatch(m, settings), settings)).join('');
+  const matchCards = matches.map(m => renderMatchCard(m, computeMatch(m, settings), settings, { compact: true })).join('');
 
   return `
     <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
