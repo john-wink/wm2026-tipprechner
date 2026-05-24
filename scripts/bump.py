@@ -37,8 +37,8 @@ HTML_FILES = [
     'es/index.html',
 ]
 
-# Assets die versioniert werden müssen
-ASSETS = ['app.js', 'i18n.js', 'styles.css', 'tailwind.css']
+# Assets die versioniert werden müssen (inkl. minifizierte Varianten)
+ASSETS = ['app.js', 'app.min.js', 'i18n.js', 'i18n.min.js', 'styles.css', 'tailwind.css']
 
 def patch_html(path):
     with open(path, 'r', encoding='utf-8') as f:
