@@ -2,16 +2,16 @@
 // Service Worker – Cache-First für Navigation & Assets, Network-Only für API.
 // Robuster gegen einzelne Cache-Failures und URL-Varianten.
 // VERSION und CORE werden von scripts/bump.py synchron mit den HTMLs aktualisiert.
-const VERSION = 'v2026.05.24.1002';
+const VERSION = 'v2026.05.24.1012';
 const CACHE = 'wm2026-' + VERSION;
 
 const CORE = [
   '/',
   '/de/', '/en/', '/fr/', '/es/',
-  '/assets/app.js?v=v2026.05.24.1002',
-  '/assets/i18n.js?v=v2026.05.24.1002',
-  '/assets/styles.css?v=v2026.05.24.1002',
-  '/assets/tailwind.css?v=v2026.05.24.1002',
+  '/assets/app.js?v=v2026.05.24.1012',
+  '/assets/i18n.js?v=v2026.05.24.1012',
+  '/assets/styles.css?v=v2026.05.24.1012',
+  '/assets/tailwind.css?v=v2026.05.24.1012',
   '/favicon.svg',
   '/icon-192.svg',
   '/icon-512.svg',
@@ -118,16 +118,16 @@ self.addEventListener('message', event => {
 // Service Worker – Cache-First für Navigation & Assets, Network-Only für API.
 // Robuster gegen einzelne Cache-Failures und URL-Varianten.
 // VERSION und CORE werden von scripts/bump.py synchron mit den HTMLs aktualisiert.
-const VERSION = 'v2026.05.23.5';
+const VERSION = 'v2026.05.24.1012';
 const CACHE = 'wm2026-' + VERSION;
 
 const CORE = [
   '/',
   '/de/', '/en/', '/fr/', '/es/',
-  '/assets/app.js?v=v2026.05.23.5',
-  '/assets/i18n.js?v=v2026.05.23.5',
-  '/assets/styles.css?v=v2026.05.23.5',
-  '/assets/tailwind.css?v=v2026.05.23.5',
+  '/assets/app.js?v=v2026.05.24.1012',
+  '/assets/i18n.js?v=v2026.05.24.1012',
+  '/assets/styles.css?v=v2026.05.24.1012',
+  '/assets/tailwind.css?v=v2026.05.24.1012',
   '/favicon.svg',
   '/icon-192.svg',
   '/icon-512.svg',
