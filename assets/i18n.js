@@ -158,6 +158,12 @@ const I18N = {
     disclaimerLiability: "<strong>Keine Haftung:</strong> Nutzung erfolgt auf eigene Verantwortung. Für Schäden durch Nutzung oder verlorene Tippspiele wird keine Haftung übernommen.",
     disclaimerClose: "Verstanden",
     disclaimerSecurityNote: "Hinweis: Dein API-Key wird in <code>sessionStorage</code> gespeichert und beim Schließen des Tabs gelöscht. Du musst ihn nach jedem Tab-Schließen neu eingeben — das ist ein bewusster Sicherheits-Trade-off.",
+
+    // Countdown & Animations
+    countdownPrefix: "Anpfiff in",
+    countdownDays: "Tag|Tagen",
+    countdownLive: "🟢 WM läuft",
+    countdownDone: "WM beendet",
   },
 
   en: {
@@ -302,6 +308,11 @@ const I18N = {
     disclaimerLiability: "<strong>No liability:</strong> Use at your own risk. No liability for damages or lost pool games.",
     disclaimerClose: "Got it",
     disclaimerSecurityNote: "Note: Your API key is stored in <code>sessionStorage</code> and cleared when the tab closes. You'll have to re-enter it on each new tab — this is an intentional security trade-off.",
+
+    countdownPrefix: "Kick-off in",
+    countdownDays: "day|days",
+    countdownLive: "🟢 World Cup live",
+    countdownDone: "World Cup ended",
   },
 
   fr: {
@@ -446,6 +457,11 @@ const I18N = {
     disclaimerLiability: "<strong>Aucune responsabilité :</strong> Utilisation à vos risques et périls. Aucune responsabilité pour les dommages ou les pronostics perdus.",
     disclaimerClose: "Compris",
     disclaimerSecurityNote: "Remarque : votre clé API est stockée dans <code>sessionStorage</code> et effacée à la fermeture de l'onglet. Vous devez la re-saisir à chaque nouvel onglet — un compromis de sécurité intentionnel.",
+
+    countdownPrefix: "Coup d'envoi dans",
+    countdownDays: "jour|jours",
+    countdownLive: "🟢 Coupe du Monde en cours",
+    countdownDone: "Coupe du Monde terminée",
   },
 
   es: {
@@ -590,6 +606,11 @@ const I18N = {
     disclaimerLiability: "<strong>Sin responsabilidad:</strong> Uso bajo tu propia responsabilidad. Sin responsabilidad por daños o pronósticos perdidos.",
     disclaimerClose: "Entendido",
     disclaimerSecurityNote: "Nota: Tu clave API se guarda en <code>sessionStorage</code> y se borra al cerrar la pestaña. Tendrás que re-introducirla en cada nueva pestaña — un compromiso de seguridad intencional.",
+
+    countdownPrefix: "Pitido inicial en",
+    countdownDays: "día|días",
+    countdownLive: "🟢 Mundial en curso",
+    countdownDone: "Mundial finalizado",
   }
 };
 

@@ -56,6 +56,14 @@ Where `tailwind-input.css` contains:
 
 You can also set up GitHub Actions to auto-build on push — example workflow in `.github/workflows/`.
 
+## Helper-Scripts in `scripts/`
+
+| Script | Zweck |
+|---|---|
+| `bump.py` | Asset-Version synchron in allen HTMLs + sw.js setzen |
+| `set-domain.py <url>` | Domain (canonical, sitemap, robots, OG, hreflang) überall ersetzen |
+| `resolve-conflicts.py` | Git-Merge-Konflikte automatisch auflösen ("ours" behalten); mit `--check` nur prüfen |
+
 ## Updates ausspielen — Asset-Versioning
 
 Damit User immer die neuesten Übersetzungen / JS-Änderungen bekommen (statt veralteten Browser-Cache zu sehen), nutzt das Projekt **versionierte Asset-URLs** wie `/assets/app.js?v=v2026.05.23.3`.

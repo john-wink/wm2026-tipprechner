@@ -644,7 +644,7 @@ function renderMatchCard(m, r, settings, opts = {}) {
     ? new Date(m.apiCommenceTime).toLocaleDateString(window.APP_LANG, { day:'2-digit', month:'2-digit', weekday:'short' })
     : '–';
   const tipHTML = r
-    ? `<div class="font-mono font-semibold text-emerald-400 text-base sm:text-lg">${r.bestTip.h}:${r.bestTip.a}</div>
+    ? `<div class="font-mono font-semibold text-emerald-400 text-base sm:text-lg tip-reveal">${r.bestTip.h}:${r.bestTip.a}</div>
        <div class="text-xs text-zinc-500 font-mono">EV ${r.bestTip.ep.toFixed(2)}</div>`
     : `<div class="text-zinc-600 text-sm">—</div>`;
 
@@ -654,7 +654,7 @@ function renderMatchCard(m, r, settings, opts = {}) {
   const expandedHTML = isExpanded ? renderDetailPanel(m, r, settings, compact) : '';
 
   return `
-    <div class="bg-zinc-900 border ${isExpanded ? 'border-emerald-600' : 'border-zinc-800'} rounded-lg mb-2 overflow-hidden transition-colors">
+    <div class="match-card-hoverable bg-zinc-900 border ${isExpanded ? 'border-emerald-600' : 'border-zinc-800'} rounded-lg mb-2 overflow-hidden transition-colors">
       <button class="w-full text-left ${compact ? 'p-2.5' : 'p-3 sm:p-4'} hover:bg-zinc-800/50 active:bg-zinc-800 transition-colors min-h-[60px]"
               onclick="toggleExpand('${m.id}')" aria-expanded="${isExpanded}">
         <div class="flex items-center gap-2 sm:gap-3">
@@ -774,9 +774,9 @@ function renderDetailPanel(m, r, settings, compact = false) {
         <span class="truncate text-right">${pA}% ${m.awayFlag}</span>
       </div>
       <div class="flex h-7 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800">
-        <div class="bg-emerald-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pH}%">${pH}%</div>
-        <div class="bg-zinc-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pD}%">${pD}%</div>
-        <div class="bg-blue-500 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pA}%">${pA}%</div>
+        <div class="prob-bar-fill bg-emerald-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pH}%">${pH}%</div>
+        <div class="prob-bar-fill bg-zinc-600 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pD}%">${pD}%</div>
+        <div class="prob-bar-fill bg-blue-500 flex items-center justify-center text-[11px] font-mono font-semibold text-white" style="width:${pA}%">${pA}%</div>
       </div>
       <div class="mt-2 flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-md px-3 py-1.5 gap-2">
         <span class="text-[11px] text-zinc-500 flex-shrink-0">${t('detailXG')}</span>
@@ -1381,6 +1381,7 @@ async function fetchAllOdds() {
   const btn = document.getElementById('fetchBtn');
   if (btn) btn.disabled = true;
   setApiStatus('busy', t('apiStatusLoading', { n: regions.length, plural: regions.length > 1 ? 's' : '' }));
+  setLoadingAnimation(true);
 
   try {
     // Beide Endpoints parallel: matches (h2h) + outright (Weltmeister)
@@ -1424,11 +1425,14 @@ async function fetchAllOdds() {
     let msg = t('toastFetched', { n: stats.matched, bm: stats.bookmakers });
     if (outrightCount > 0) msg += ' · ' + t('outrightLoaded', { n: outrightCount });
     toast(msg);
+    // Erfolgs-Konfetti — nur wenn tatsächlich Daten kamen
+    if (stats.matched > 0) celebrateConfetti(50);
   } catch (e) {
     setApiStatus('err', t('apiStatusError', { msg: e.message }));
     toast(t('toastApiError', { msg: e.message }), true);
   } finally {
     if (btn) btn.disabled = false;
+    setLoadingAnimation(false);
   }
 }
 
@@ -1673,6 +1677,84 @@ function updateApiStatusFromKey() {
   else if (key) setApiStatus('', t('apiStatusKeySet'));
   else setApiStatus('', t('apiStatusEmpty'));
 }
+// ===== WM-2026 GIMMICKS =====
+// Subtile Animationen — alle respektieren prefers-reduced-motion via CSS
+
+const WM_2026_KICKOFF = new Date('2026-06-11T15:00:00-05:00'); // Mexico ET, Eröffnungsspiel
+const WM_2026_END = new Date('2026-07-19T23:59:59-05:00');
+
+function renderCountdown() {
+  // Setzt #wmCountdown im Footer (falls vorhanden)
+  const el = document.getElementById('wmCountdown');
+  if (!el) return;
+  const now = new Date();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysToKick = Math.ceil((WM_2026_KICKOFF - now) / msPerDay);
+  const daysToEnd = Math.ceil((WM_2026_END - now) / msPerDay);
+  if (daysToKick > 0) {
+    const pluralForms = (t('countdownDays') || 'day|days').split('|');
+    const word = daysToKick === 1 ? pluralForms[0] : pluralForms[1];
+    el.innerHTML = `<span class="countdown-pill">⚽ ${t('countdownPrefix')} <span class="num">${daysToKick}</span> ${word}</span>`;
+  } else if (daysToEnd > 0) {
+    el.innerHTML = `<span class="countdown-pill">${t('countdownLive')}</span>`;
+  } else {
+    el.innerHTML = `<span class="countdown-pill">${t('countdownDone')}</span>`;
+  }
+}
+
+// Konfetti in Host-Nation-Farben (USA blau/rot/weiß + Kanada rot + Mexiko grün/weiß/rot)
+const CONFETTI_COLORS = ['#3fb950', '#58a6ff', '#ffffff', '#ef4444', '#f59e0b'];
+function celebrateConfetti(count = 60) {
+  // Respect reduced motion
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  let container = document.getElementById('confettiContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'confettiContainer';
+    container.className = 'confetti-container';
+    container.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(container);
+  }
+  const W = window.innerWidth;
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    const startX = Math.random() * W;
+    const drift = (Math.random() - 0.5) * 300; // horizontal drift
+    const rot = (Math.random() * 720) + 360;
+    const duration = 2200 + Math.random() * 1500;
+    const delay = Math.random() * 400;
+    p.style.cssText =
+      `background:${color};` +
+      `left:${startX}px;` +
+      `--drift:${drift}px;` +
+      `--rot:${rot}deg;` +
+      `animation-duration:${duration}ms;` +
+      `animation-delay:${delay}ms;` +
+      `transform:rotate(${Math.random() * 360}deg);`;
+    container.appendChild(p);
+    setTimeout(() => p.remove(), duration + delay + 200);
+  }
+}
+
+// Lade-Animation am Brand-Mark + Fetch-Button starten/stoppen
+function setLoadingAnimation(isLoading) {
+  const brandMark = document.querySelector('.brand-mark, [class*="bg-gradient-to-br"][class*="from-emerald-500"][class*="to-blue-500"]');
+  if (brandMark) brandMark.classList.toggle('brand-pulsing', isLoading);
+  // Ball-Icon im Fetch-Button beim Loading drehen lassen (Button enthält data-i18n=fetchOdds)
+  const btn = document.getElementById('fetchBtn');
+  if (btn) {
+    if (isLoading && !btn.dataset.originalText) {
+      btn.dataset.originalText = btn.textContent;
+      btn.innerHTML = `<span class="ball-spin">⚽</span> ${btn.dataset.originalText}`;
+    } else if (!isLoading && btn.dataset.originalText) {
+      btn.textContent = btn.dataset.originalText;
+      delete btn.dataset.originalText;
+    }
+  }
+}
+
 function toast(msg, isError) {
   const el = document.getElementById('toast');
   if (!el) return;
@@ -1831,7 +1913,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Disclaimer beim ersten Besuch zeigen
   showDisclaimer(false);
 
-  // Footer-Link für Disclaimer einfügen falls vorhanden
+  // Footer-Link für Disclaimer + WM-Countdown + Host-Flags einfügen
   const footer = document.querySelector('footer p');
   if (footer && !document.getElementById('disclaimerFooterLink')) {
     const sep = document.createElement('span');
@@ -1844,6 +1926,17 @@ window.addEventListener('DOMContentLoaded', () => {
     link.onclick = (e) => { e.preventDefault(); showDisclaimer(true); };
     footer.appendChild(sep);
     footer.appendChild(link);
+  }
+  // Countdown-Zeile + Host-Flags hinzufügen (separate p)
+  const footerEl = document.querySelector('footer');
+  if (footerEl && !document.getElementById('wmCountdown')) {
+    const cdLine = document.createElement('p');
+    cdLine.className = 'mt-2 text-zinc-500 text-xs flex items-center justify-center gap-3 flex-wrap';
+    cdLine.innerHTML = `<span id="wmCountdown"></span><span class="text-zinc-700">·</span><span title="USA · Canada · Mexico">🇺🇸 🇨🇦 🇲🇽</span>`;
+    footerEl.appendChild(cdLine);
+    renderCountdown();
+    // Stündlich aktualisieren (für Countdown wenn der User die Seite lange offen lässt)
+    setInterval(renderCountdown, 60 * 60 * 1000);
   }
 
   // Security-Hinweis neben dem API-Key-Input
