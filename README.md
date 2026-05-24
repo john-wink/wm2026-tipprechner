@@ -138,7 +138,7 @@ After deploy, add a custom domain in **Vercel → Project Settings → Domains**
 - `robots.txt`: `Sitemap:` line
 - Root `index.html`: canonical + OpenGraph
 
-A quick search/replace from `wm2026-tipprechner.vercel.app` to your real domain handles it. Then submit the sitemap to [Google Search Console](https://search.google.com/search-console).
+Use `python3 scripts/set-domain.py https://your-domain.com` to replace the canonical host across all HTMLs, sitemap, robots, OG-tags and JSON-LD in one go. Then `python3 scripts/bump.py` and `git push`. Finally submit the sitemap to [Google Search Console](https://search.google.com/search-console).
 
 ## i18n: add or change strings
 

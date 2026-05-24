@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://wm2026-tipprechner.vercel.app/sitemap.xml
+Sitemap: https://wm26-odds.com/sitemap.xml
