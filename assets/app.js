@@ -281,8 +281,22 @@ function getSettings() {
 }
 function computeMatch(m, settings) {
   const active = getActiveProbs(m);
-  if (!active.probs) return null;
-  const [lh, la] = findLambdas(active.probs.pH, active.probs.pD, active.probs.pA);
+  let lh, la, probs, source, label, agg;
+  if (active.probs) {
+    [lh, la] = findLambdas(active.probs.pH, active.probs.pD, active.probs.pA);
+    probs = active.probs; source = active.source; label = active.label; agg = active.agg;
+  } else if (m.isKO) {
+    // K.-o.-Fallback: ohne Quoten wird aus der Team-Stärke (Outright) eine Schätzung
+    // der erwarteten Tore abgeleitet, damit jedes K.-o.-Spiel einen Tipp hat.
+    const sl = strengthLambdas(m.home, m.away);
+    if (!sl) return null;
+    lh = sl.lh; la = sl.la;
+    const [pH, pD, pA] = outcomesFromLambdas(lh, la);
+    probs = { pH, pD, pA, vig: 0 };
+    source = 'model'; label = t('labelModel');
+  } else {
+    return null;
+  }
   let matrix = scoreMatrix(lh, la, settings.maxGoals);
   // Dixon-Coles low-score correction (default rho ≈ -0.1 aus Literatur)
   const rho = getDixonColesRho();
@@ -290,8 +304,8 @@ function computeMatch(m, settings) {
   const rules = { exact: settings.exact, diff: settings.diff, tend: settings.tend };
   const tip = bestKicktippTip(matrix, rules, settings.maxGoals);
   const top = topScores(matrix, 10);
-  return { probs: active.probs, lh, la, matrix, bestTip: tip, topScores: top,
-           source: active.source, label: active.label, agg: active.agg };
+  return { probs, lh, la, matrix, bestTip: tip, topScores: top,
+           source, label, agg };
 }
 function computeAllAggTips(m, settings) {
   if (!m.bookmakerData || m.bookmakerData.length === 0) return null;
@@ -560,6 +574,7 @@ function switchTab(tab) {
   });
   if (tab === 'overview') renderOverview();
   if (tab === 'groups') renderGroups();
+  if (tab === 'knockout') renderKnockout();
   if (tab === 'specials') renderSpecials();
   // scroll to top of content
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -569,11 +584,11 @@ function switchTab(tab) {
 let expandedId = null;
 function toggleExpand(id) {
   expandedId = expandedId === id ? null : id;
-  renderOverview(); renderGroups();
+  renderOverview(); renderGroups(); renderKnockout();
 }
 function clearExpanded() {
   expandedId = null;
-  renderOverview(); renderGroups();
+  renderOverview(); renderGroups(); renderKnockout();
 }
 
 // ===== SORT STATE =====
@@ -987,6 +1002,12 @@ function renderManualOddsInput(m, compact = false) {
 }
 
 function clearManualOdds(id) {
+  if (isKoId(id)) {
+    delete koState.odds[id];
+    renderKnockout();
+    saveState(true);
+    return;
+  }
   matchData[id].oddH = matchData[id].oddD = matchData[id].oddA = null;
   renderOverview(); renderGroups();
   saveState(true);
@@ -1059,6 +1080,103 @@ function renderGroupCard(g, settings) {
       <div class="p-2">${matchCards}</div>
     </div>
   `;
+}
+
+// ===== RENDER: K.-O.-RUNDEN =====
+const KO_ROUND_LABEL = { r32: 'koR32', r16: 'koR16', qf: 'koQF', sf: 'koSF', final: 'koFinal', third: 'koThird' };
+
+function renderKnockout() {
+  const root = document.getElementById('koContainer');
+  if (!root) return;
+  const settings = getSettings();
+  const rounds = buildKnockout(settings);
+  const champ = koWinner(koMatchData['KO-F-1'], settings);
+  const champHTML = champ
+    ? `<div class="bg-gradient-to-br from-emerald-500/15 to-blue-500/15 border border-emerald-600/50 rounded-lg p-4 mb-4 flex items-center gap-3">
+         <span class="text-3xl">🏆</span>
+         <div>
+           <div class="text-[10px] uppercase tracking-wider text-zinc-400">${t('koChampion')}</div>
+           <div class="text-xl font-semibold text-emerald-400">${teamFlag(champ)} ${teamLabel(champ)}</div>
+         </div>
+       </div>`
+    : '';
+  root.innerHTML = champHTML + renderKoControls(settings) + rounds.map(r => renderKoRound(r, settings)).join('');
+}
+
+function renderKoControls(settings) {
+  const rows = Object.keys(GROUPS).map(g => {
+    const order = koGroupOrder(g, settings);
+    const opts = (sel) => GROUPS[g].teams
+      .map(tk => `<option value="${tk}" ${tk === sel ? 'selected' : ''}>${teamLabel(tk)}</option>`).join('');
+    const mk = (place, label) => `<label class="flex items-center gap-1 text-[11px] text-zinc-500">${label}
+        <select onchange="setKoGroupPlace('${g}',${place},this.value)" class="bg-zinc-950 border border-zinc-800 text-zinc-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:border-emerald-500">${opts(order[place])}</select></label>`;
+    return `<div class="flex items-center gap-2 flex-wrap bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1.5">
+        <span class="text-xs font-semibold text-zinc-300 w-5">${g}</span>
+        ${mk(0, '1.')}${mk(1, '2.')}${mk(2, '3.')}
+      </div>`;
+  }).join('');
+  const dirty = Object.keys(koState.groupOrder).length || Object.keys(koState.winners).length;
+  return wrapSection(t('koSeedingTitle'),
+    `<p class="text-[11px] text-zinc-500 mb-3">${t('koSeedingHelp')}</p>
+     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">${rows}</div>
+     ${dirty ? `<div class="mt-3"><button onclick="resetKo()" class="text-xs text-zinc-400 hover:text-red-400 px-2 py-1 min-h-[32px]">${t('koReset')}</button></div>` : ''}`
+  );
+}
+
+function renderKoRound(rnd, settings) {
+  const cards = rnd.matches.map(m => renderKoMatch(m, settings)).join('');
+  const cols = rnd.matches.length > 1 ? 'grid grid-cols-1 md:grid-cols-2 gap-x-4' : '';
+  return `
+    <section class="mb-6">
+      <h3 class="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+        ${t(KO_ROUND_LABEL[rnd.key])}
+        <span class="text-[11px] text-zinc-500 font-normal">${rnd.matches.length} ${t('koMatchesWord')}</span>
+      </h3>
+      <div class="${cols}">${cards}</div>
+    </section>`;
+}
+
+function renderKoMatch(m, settings) {
+  const r = computeMatch(m, settings);
+  const card = renderMatchCard(m, r, settings, { compact: true });
+  const w = koWinner(m, settings);
+  const overridden = !!koState.winners[m.id];
+  const btn = (team, flag) => {
+    const active = w === team;
+    const cls = active
+      ? 'bg-emerald-600 text-white border-emerald-500'
+      : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-600';
+    return `<button onclick="setKoWinner('${m.id}','${team}')" class="${cls} border rounded px-2 py-1 min-h-[30px] truncate max-w-[45%]" title="${teamLabel(team)}">${flag} ${teamLabel(team)}</button>`;
+  };
+  const adv = `
+    <div class="flex items-center gap-1.5 px-2.5 py-1.5 -mt-2 mb-2 bg-zinc-950/60 border border-t-0 border-zinc-800 rounded-b-lg text-[11px]" onclick="event.stopPropagation()">
+      <span class="text-zinc-500 flex-shrink-0">${t('koAdvances')}</span>
+      ${btn(m.home, m.homeFlag)}
+      ${btn(m.away, m.awayFlag)}
+      ${overridden ? `<button onclick="clearKoWinner('${m.id}')" class="text-zinc-500 hover:text-zinc-300 ml-auto flex-shrink-0 px-1" title="${t('koResetPick')}">↺</button>` : ''}
+    </div>`;
+  return `<div class="ko-match">${card}${adv}</div>`;
+}
+
+// K.-o.-Interaktion
+function setKoGroupPlace(g, place, team) {
+  let arr = koGroupOrder(g, getSettings()).filter(x => x !== team);
+  arr.splice(place, 0, team);
+  koState.groupOrder[g] = arr.slice(0, 4);
+  renderKnockout(); saveState(true);
+}
+function setKoWinner(id, team) {
+  koState.winners[id] = team;
+  renderKnockout(); saveState(true);
+}
+function clearKoWinner(id) {
+  delete koState.winners[id];
+  renderKnockout(); saveState(true);
+}
+function resetKo() {
+  koState = { groupOrder: {}, winners: {}, odds: {}, agg: {} };
+  renderKnockout(); saveState(true);
+  toast(t('koResetDone'));
 }
 
 // ===== SPECIALS: Outright-Daten & Monte-Carlo =====
@@ -1333,6 +1451,163 @@ function simulateFullTournament(settings, nSims = 1500) {
   return tournamentSimResult;
 }
 
+// ===== K.-O.-RUNDEN (Sechzehntel → Finale) =====
+// Voller Tipp-Bracket mit denselben Details wie Gruppenspiele.
+// Paarungen werden automatisch aus dem Modell gebildet (wahrscheinlichste
+// Gruppen-Endplatzierung), pro Spiel manuell korrigierbar.
+let koMatchData = {};          // id → match-Objekt (ephemer, bei jedem Render neu)
+let koOddsIndex = {};          // pairKey → { home, away, bms, commence } (aus API)
+let koState = { groupOrder: {}, winners: {}, odds: {}, agg: {} }; // persistente Overrides
+
+function isKoId(id) { return typeof id === 'string' && id.indexOf('KO-') === 0; }
+
+// Flagge je Team-Key (GROUPS speichert Flaggen positionsbasiert)
+const FLAG_BY_TEAM = (() => {
+  const f = {};
+  for (const g of Object.keys(GROUPS)) GROUPS[g].teams.forEach((tk, i) => { f[tk] = GROUPS[g].flags[i]; });
+  return f;
+})();
+function teamFlag(k) { return FLAG_BY_TEAM[k] || '⚽'; }
+
+// Aus Team-Stärke (Outright-Wkt) erwartete Tore ableiten (Fallback ohne Quoten).
+// Outright-Wkt ist eine Turniersieg-Wkt → log-Rating, Differenz auf Tor-Supremacy
+// gemappt und gedeckelt, damit keine absurden Einzelspiel-Lambdas entstehen.
+function strengthLambdas(home, away) {
+  const s = getTeamStrength();
+  const sA = s[home], sB = s[away];
+  if (!sA || !sB) return null;
+  const TG = 2.6; // erwartete Tore gesamt (grober WM-K.o.-Schnitt)
+  let sup = 0.45 * (Math.log(sA) - Math.log(sB));
+  sup = Math.max(-2.2, Math.min(2.2, sup));
+  let lh = Math.max(0.2, TG / 2 + sup / 2);
+  let la = Math.max(0.2, TG / 2 - sup / 2);
+  return { lh, la };
+}
+
+// Endreihenfolge einer Gruppe [1.,2.,3.,4.] – Override > Quoten-Standings > Stärke
+function koGroupOrder(g, settings) {
+  const ov = koState.groupOrder[g];
+  if (ov && ov.length === 4) return ov.slice();
+  const haveData = Object.values(matchData).filter(m => m.group === g)
+    .some(m => computeMatch(m, settings));
+  if (haveData) return computeStandings(g, settings).map(s => s.team);
+  const s = getTeamStrength();
+  return GROUPS[g].teams.slice().sort((a, b) => (s[b] || 0) - (s[a] || 0));
+}
+
+// Die 8 besten Gruppendritten (nach erwarteten Punkten / Stärke) → Gruppenbuchstaben
+function koBestThirds(settings) {
+  const st = getTeamStrength();
+  const arr = Object.keys(GROUPS).map(g => {
+    const order = koGroupOrder(g, settings);
+    const third = order[2];
+    const haveData = Object.values(matchData).filter(m => m.group === g)
+      .some(m => computeMatch(m, settings));
+    let q;
+    if (haveData) {
+      const row = computeStandings(g, settings).find(x => x.team === third);
+      q = row ? row.pts * 1000 + row.gd : 0;
+    } else {
+      q = st[third] || 0;
+    }
+    return { g, q };
+  });
+  arr.sort((a, b) => b.q - a.q);
+  return arr.slice(0, 8).map(x => x.g);
+}
+
+// R32-Paarungen mit eindeutiger Zuteilung der besten Dritten
+function buildBracketUnique(groupResults, best3) {
+  const used = new Set();
+  const lookup = (slot) => {
+    if (slot[0] === '1') return groupResults[slot.slice(1)][0];
+    if (slot[0] === '2') return groupResults[slot.slice(1)][1];
+    const cands = slot.slice(1).split('');
+    for (const c of cands) if (best3.includes(c) && !used.has(c)) { used.add(c); return groupResults[c][2]; }
+    for (const c of best3) if (!used.has(c)) { used.add(c); return groupResults[c][2]; }
+    return groupResults[best3[0]][2];
+  };
+  return FIFA_2026_R32.map(([a, b]) => [lookup(a), lookup(b)]);
+}
+
+// Aufsteiger eines K.-o.-Spiels: Override > Favorit (höhere Sieg-Wkt) > Stärke
+function koWinner(m, settings) {
+  const ov = koState.winners[m.id];
+  if (ov && (ov === m.home || ov === m.away)) return ov;
+  const r = computeMatch(m, settings);
+  if (!r) {
+    const s = getTeamStrength();
+    return (s[m.home] || 0) >= (s[m.away] || 0) ? m.home : m.away;
+  }
+  return r.probs.pH >= r.probs.pA ? m.home : m.away;
+}
+
+function makeKoMatch(id, home, away, round) {
+  const m = {
+    id, isKO: true, round,
+    home, away,
+    homeFlag: teamFlag(home), awayFlag: teamFlag(away),
+    homeIdx: 0, awayIdx: 1,
+    oddH: null, oddD: null, oddA: null,
+    bookmakerData: findKoOdds(home, away) || [],
+    apiCommenceTime: (koOddsIndex[pairKey(home, away)] || {}).commence || null,
+    aggOverride: koState.agg[id] || null
+  };
+  const o = koState.odds[id];
+  if (o) { m.oddH = o.oddH != null ? o.oddH : null; m.oddD = o.oddD != null ? o.oddD : null; m.oddA = o.oddA != null ? o.oddA : null; }
+  return m;
+}
+
+// Kompletten Bracket aufbauen → rounds[{ key, matches[] }]; füllt koMatchData
+function buildKnockout(settings) {
+  koMatchData = {};
+  const groupResults = {};
+  for (const g of Object.keys(GROUPS)) groupResults[g] = koGroupOrder(g, settings);
+  const best3 = koBestThirds(settings);
+  const r32pairs = buildBracketUnique(groupResults, best3);
+
+  const rounds = [];
+  const r32 = r32pairs.map((p, i) => {
+    const m = makeKoMatch(`KO-R32-${i + 1}`, p[0], p[1], 'r32');
+    koMatchData[m.id] = m; return m;
+  });
+  rounds.push({ key: 'r32', matches: r32 });
+
+  const r32w = r32.map(m => koWinner(m, settings));
+  const r16 = FIFA_2026_R16_PAIRS.map((pi, i) => {
+    const m = makeKoMatch(`KO-R16-${i + 1}`, r32w[pi[0]], r32w[pi[1]], 'r16');
+    koMatchData[m.id] = m; return m;
+  });
+  rounds.push({ key: 'r16', matches: r16 });
+
+  const r16w = r16.map(m => koWinner(m, settings));
+  const qf = [];
+  for (let i = 0; i < r16w.length; i += 2) {
+    const m = makeKoMatch(`KO-QF-${i / 2 + 1}`, r16w[i], r16w[i + 1], 'qf');
+    koMatchData[m.id] = m; qf.push(m);
+  }
+  rounds.push({ key: 'qf', matches: qf });
+
+  const qfw = qf.map(m => koWinner(m, settings));
+  const sf = [];
+  for (let i = 0; i < qfw.length; i += 2) {
+    const m = makeKoMatch(`KO-SF-${i / 2 + 1}`, qfw[i], qfw[i + 1], 'sf');
+    koMatchData[m.id] = m; sf.push(m);
+  }
+  rounds.push({ key: 'sf', matches: sf });
+
+  const sfw = sf.map(m => koWinner(m, settings));
+  const sfl = sf.map(m => { const w = koWinner(m, settings); return w === m.home ? m.away : m.home; });
+  const fin = makeKoMatch('KO-F-1', sfw[0], sfw[1], 'final');
+  koMatchData[fin.id] = fin;
+  const third = makeKoMatch('KO-3P-1', sfl[0], sfl[1], 'third');
+  koMatchData[third.id] = third;
+  rounds.push({ key: 'final', matches: [fin] });
+  rounds.push({ key: 'third', matches: [third] });
+
+  return rounds;
+}
+
 // ===== API FETCH =====
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
 const SPORT_KEY = 'soccer_fifa_world_cup';
@@ -1420,7 +1695,7 @@ async function fetchAllOdds() {
     }
 
     setApiStatus('ok', t('apiStatusLoaded', { matches: stats.matched, bms: stats.bookmakers }) + (remaining ? ` · ${remaining} credits` : ''));
-    renderOverview(); renderGroups(); renderSpecials();
+    renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
     saveState(true);
     let msg = t('toastFetched', { n: stats.matched, bm: stats.bookmakers });
     if (outrightCount > 0) msg += ' · ' + t('outrightLoaded', { n: outrightCount });
@@ -1472,16 +1747,14 @@ function applyOutrightEvents(events) {
 }
 function applyApiEvents(events) {
   for (const m of Object.values(matchData)) m.bookmakerData = [];
+  koOddsIndex = {}; // K.-o.-Quoten neu aufbauen (siehe findKoOdds)
   let matched = 0, totalBM = 0;
   for (const ev of events) {
     const hI = findInternalTeam(ev.home_team);
     const aI = findInternalTeam(ev.away_team);
     if (!hI || !aI) continue;
-    const match = Object.values(matchData).find(m =>
-      (m.home === hI && m.away === aI) || (m.home === aI && m.away === hI));
-    if (!match) continue;
-    const flipped = match.home !== hI;
-    const bms = [];
+    // Quoten orientiert auf hI = Heim (API-Reihenfolge)
+    const bmsHI = [];
     for (const bm of (ev.bookmakers || [])) {
       const h2h = (bm.markets || []).find(x => x.key === 'h2h');
       if (!h2h) continue;
@@ -1492,23 +1765,46 @@ function applyApiEvents(events) {
         else if (o.name === ev.away_team) oA = o.price;
       }
       if (oH && oD && oA && oH > 1 && oD > 1 && oA > 1) {
-        const useH = flipped ? oA : oH, useA = flipped ? oH : oA;
-        const p = oddsToProbs(useH, oD, useA);
-        if (p) bms.push({ key: bm.key, title: bm.title, oH: useH, oD, oA: useA, pH: p.pH, pD: p.pD, pA: p.pA, vig: p.vig });
+        const p = oddsToProbs(oH, oD, oA);
+        if (p) bmsHI.push({ key: bm.key, title: bm.title, oH, oD, oA, pH: p.pH, pD: p.pD, pA: p.pA, vig: p.vig });
       }
     }
-    if (bms.length > 0) {
-      match.bookmakerData = bms;
+    if (bmsHI.length === 0) continue;
+    // K.-o.-Index: nach ungeordnetem Team-Paar, da K.-o.-Paarungen dynamisch sind
+    koOddsIndex[pairKey(hI, aI)] = { home: hI, away: aI, bms: bmsHI, commence: ev.commence_time };
+    // Gruppenspiel (orientiert auf match.home)
+    const match = Object.values(matchData).find(m =>
+      (m.home === hI && m.away === aI) || (m.home === aI && m.away === hI));
+    if (match) {
+      match.bookmakerData = (match.home !== hI) ? bmsHI.map(flipBm) : bmsHI;
       match.apiCommenceTime = ev.commence_time;
-      matched++; totalBM += bms.length;
+      matched++; totalBM += bmsHI.length;
     }
   }
   return { matched, bookmakers: totalBM };
 }
 
+// Buchmacher-Eintrag spiegeln (Heim/Auswärts tauschen)
+function flipBm(b) {
+  return { key: b.key, title: b.title, oH: b.oA, oD: b.oD, oA: b.oH, pH: b.pA, pD: b.pD, pA: b.pH, vig: b.vig };
+}
+function pairKey(a, b) { return [a, b].sort().join('|'); }
+// K.-o.-Quoten für eine Paarung holen, orientiert auf (home, away)
+function findKoOdds(home, away) {
+  const e = koOddsIndex[pairKey(home, away)];
+  if (!e || !e.bms.length) return null;
+  return (e.home === home) ? e.bms.slice() : e.bms.map(flipBm);
+}
+
 // ===== INTERAKTION =====
 function updateOdds(id, field, value) {
-  matchData[id][field] = value === '' ? null : parseFloat(value);
+  const v = value === '' ? null : parseFloat(value);
+  if (isKoId(id)) {
+    (koState.odds[id] = koState.odds[id] || {})[field] = v;
+    scheduleRender();
+    return;
+  }
+  matchData[id][field] = v;
   scheduleRender();
 }
 let _renderTimer = null;
@@ -1516,11 +1812,18 @@ function scheduleRender() {
   clearTimeout(_renderTimer);
   _renderTimer = setTimeout(() => {
     clearGroupSimCache();
-    renderOverview(); renderGroups(); renderSpecials();
+    renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
     saveState(true);
   }, 250);
 }
 function setAggOverride(mid, method) {
+  if (isKoId(mid)) {
+    koState.agg[mid] = koState.agg[mid] === method ? null : method;
+    if (!koState.agg[mid]) delete koState.agg[mid];
+    renderKnockout();
+    saveState(true);
+    return;
+  }
   matchData[mid].aggOverride = matchData[mid].aggOverride === method ? null : method;
   renderOverview(); renderGroups();
   saveState(true);
@@ -1564,6 +1867,8 @@ function saveState(silent) {
     matchData,
     outrightData,
     topScorerOverride,
+    koState,
+    koOddsIndex,
     settings: {
       ptsExact: document.getElementById('ptsExact').value,
       ptsDiff: document.getElementById('ptsDiff').value,
@@ -1604,6 +1909,8 @@ function loadState() {
     }
     if (state.outrightData) outrightData = state.outrightData;
     if (state.topScorerOverride !== undefined) topScorerOverride = state.topScorerOverride || '';
+    if (state.koState) koState = Object.assign({ groupOrder: {}, winners: {}, odds: {}, agg: {} }, state.koState);
+    if (state.koOddsIndex) koOddsIndex = state.koOddsIndex;
     clearGroupSimCache();
     if (state.settings) {
       for (const [k, v] of Object.entries(state.settings)) {
@@ -1617,7 +1924,7 @@ function loadState() {
     const apiEl = document.getElementById('apiKey');
     if (apiEl) apiEl.value = loadApiKey();
     updateApiStatusFromKey();
-    renderOverview(); renderGroups(); renderSpecials();
+    renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
     toast(t('toastLoaded'));
   } catch (e) { toast(t('toastLoadFail', { msg: e.message }), true); }
 }
@@ -1626,6 +1933,8 @@ function clearAll() {
   initMatches();
   outrightData = null;
   topScorerOverride = '';
+  koState = { groupOrder: {}, winners: {}, odds: {}, agg: {} };
+  koOddsIndex = {};
   clearGroupSimCache();
   document.getElementById('ptsExact').value = 4;
   document.getElementById('ptsDiff').value = 3;
@@ -1638,7 +1947,7 @@ function clearAll() {
   try { sessionStorage.removeItem(SESSION_API_KEY); } catch (e) {}
   expandedId = null;
   setApiStatus('', t('apiStatusEmpty'));
-  renderOverview(); renderGroups(); renderSpecials();
+  renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
   toast(t('toastReset'));
 }
 function exportCSV() {
@@ -1778,7 +2087,7 @@ document.addEventListener('keydown', (e) => {
     }
     if (expandedId) {
       expandedId = null;
-      renderOverview(); renderGroups();
+      renderOverview(); renderGroups(); renderKnockout();
     }
   }
 });
@@ -1855,7 +2164,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const evt = el.tagName === 'SELECT' ? 'change' : 'input';
     el.addEventListener(evt, () => {
       clearGroupSimCache();
-      renderOverview(); renderGroups(); renderSpecials();
+      renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
       saveState(true);
     });
   });
@@ -1893,6 +2202,8 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       if (state.outrightData) outrightData = state.outrightData;
       if (state.topScorerOverride !== undefined) topScorerOverride = state.topScorerOverride || '';
+      if (state.koState) koState = Object.assign({ groupOrder: {}, winners: {}, odds: {}, agg: {} }, state.koState);
+      if (state.koOddsIndex) koOddsIndex = state.koOddsIndex;
       if (state.settings) for (const [k, v] of Object.entries(state.settings)) {
         if (k === 'apiKey') continue; // sicherheits-kritisch: kommt aus sessionStorage
         const el = document.getElementById(k);
@@ -1905,7 +2216,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const apiEl = document.getElementById('apiKey');
   if (apiEl) apiEl.value = loadApiKey();
   updateApiStatusFromKey();
-  renderOverview(); renderGroups(); renderSpecials();
+  renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
 
   // Service Worker registrieren (PWA)
   registerServiceWorker();

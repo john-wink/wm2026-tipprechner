@@ -54,9 +54,9 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://api.the-odds-api.com" crossorigin>
 <link rel="dns-prefetch" href="https://api.the-odds-api.com">
-<link rel="stylesheet" href="/assets/styles.css?v=v2026.05.24.1646">
+<link rel="stylesheet" href="/assets/styles.css?v=v2026.06.28.0940">
 
-<link rel="stylesheet" href="/assets/tailwind.css?v=v2026.05.24.1646" fetchpriority="high">
+<link rel="stylesheet" href="/assets/tailwind.css?v=v2026.06.28.0940" fetchpriority="high">
 <script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
 <script>window.APP_LANG = 'de';</script>
 </head>
@@ -95,6 +95,10 @@
     <button data-tab="groups" onclick="switchTab('groups')" class="text-zinc-400 border-b-2 border-transparent px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
       <span data-i18n="tabGroups"></span>
       <span class="ml-1.5 inline-block text-[11px] bg-zinc-900 px-1.5 py-0.5 rounded text-zinc-400">12</span>
+    </button>
+    <button data-tab="knockout" onclick="switchTab('knockout')" class="text-zinc-400 border-b-2 border-transparent px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
+      <span data-i18n="tabKnockout"></span>
+      <span class="ml-1.5 inline-block text-[11px] bg-zinc-900 px-1.5 py-0.5 rounded text-zinc-400">32</span>
     </button>
     <button data-tab="specials" onclick="switchTab('specials')" class="text-zinc-400 border-b-2 border-transparent px-3 sm:px-4 py-3 text-sm font-medium min-h-[44px]">
       <span data-i18n="tabSpecials"></span>
@@ -137,6 +141,14 @@
       <span class="text-amber-400">●</span> <span data-i18n="groupQual3"></span>.
     </p>
     <div id="groupsGrid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+  </section>
+
+  <section data-tab-content="knockout" class="hidden">
+    <h2 class="text-lg font-semibold mb-2 flex items-center gap-2.5 flex-wrap">
+      <span data-i18n="sectionKnockout"></span>
+    </h2>
+    <p class="text-zinc-400 text-sm mb-4 max-w-3xl" data-i18n="knockoutHelp"></p>
+    <div id="koContainer"></div>
   </section>
 
   <section data-tab-content="specials" class="hidden">
@@ -212,8 +224,8 @@
 
 <div id="toast" class="fixed bottom-4 right-4 left-4 sm:left-auto z-[200] bg-zinc-900 border border-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-xl text-sm opacity-0 pointer-events-none transition-all"></div>
 
-<link rel="preload" as="script" href="/assets/i18n.min.js?v=v2026.05.24.1646">
-<script defer src="/assets/i18n.min.js?v=v2026.05.24.1646"></script>
-<script defer src="/assets/app.min.js?v=v2026.05.24.1646"></script>
+<link rel="preload" as="script" href="/assets/i18n.min.js?v=v2026.06.28.0940">
+<script defer src="/assets/i18n.min.js?v=v2026.06.28.0940"></script>
+<script defer src="/assets/app.min.js?v=v2026.06.28.0940"></script>
 </body>
 </html>
