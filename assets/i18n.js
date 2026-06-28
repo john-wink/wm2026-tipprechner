@@ -118,6 +118,9 @@ const I18N = {
     koThird: "Spiel um Platz 3",
     koMatchesWord: "Spiele",
     koChampion: "Voraussichtlicher Weltmeister",
+    koRealResult: "Echtes Ergebnis",
+    koWinnerWord: "Sieger:",
+    resultsLoaded: "{n} Ergebnisse",
 
     // Specials Tab
     tabSpecials: "Sonderwetten",
@@ -294,6 +297,9 @@ const I18N = {
     koThird: "Third-place play-off",
     koMatchesWord: "matches",
     koChampion: "Projected champion",
+    koRealResult: "Actual result",
+    koWinnerWord: "Winner:",
+    resultsLoaded: "{n} results",
 
     tabSpecials: "Specials",
     sectionSpecials: "World Cup specials",
@@ -463,6 +469,9 @@ const I18N = {
     koThird: "Match pour la 3e place",
     koMatchesWord: "matchs",
     koChampion: "Champion prévu",
+    koRealResult: "Résultat réel",
+    koWinnerWord: "Vainqueur :",
+    resultsLoaded: "{n} résultats",
 
     tabSpecials: "Paris spéciaux",
     sectionSpecials: "Paris spéciaux Coupe du Monde",
@@ -632,6 +641,9 @@ const I18N = {
     koThird: "Partido por el tercer puesto",
     koMatchesWord: "partidos",
     koChampion: "Campeón previsto",
+    koRealResult: "Resultado real",
+    koWinnerWord: "Ganador:",
+    resultsLoaded: "{n} resultados",
 
     tabSpecials: "Apuestas especiales",
     sectionSpecials: "Apuestas especiales del Mundial",
