@@ -121,6 +121,7 @@ const I18N = {
     koRealResult: "Echtes Ergebnis",
     koWinnerWord: "Sieger:",
     resultsLoaded: "{n} Ergebnisse",
+    koLiveNote: "Paarungen aus Live-Daten der API (echte Ergebnisse). Noch nicht ausgeloste Runden sind Prognose bis zur offiziellen Auslosung.",
 
     // Specials Tab
     tabSpecials: "Sonderwetten",
@@ -300,6 +301,7 @@ const I18N = {
     koRealResult: "Actual result",
     koWinnerWord: "Winner:",
     resultsLoaded: "{n} results",
+    koLiveNote: "Pairings from live API data (real results). Rounds not yet drawn are predictions until the official draw.",
 
     tabSpecials: "Specials",
     sectionSpecials: "World Cup specials",
@@ -472,6 +474,7 @@ const I18N = {
     koRealResult: "Résultat réel",
     koWinnerWord: "Vainqueur :",
     resultsLoaded: "{n} résultats",
+    koLiveNote: "Affiches issues des données live de l'API (résultats réels). Les tours pas encore tirés sont des pronostics jusqu'au tirage officiel.",
 
     tabSpecials: "Paris spéciaux",
     sectionSpecials: "Paris spéciaux Coupe du Monde",
@@ -644,6 +647,7 @@ const I18N = {
     koRealResult: "Resultado real",
     koWinnerWord: "Ganador:",
     resultsLoaded: "{n} resultados",
+    koLiveNote: "Cruces a partir de datos en vivo de la API (resultados reales). Las rondas aún no sorteadas son pronósticos hasta el sorteo oficial.",
 
     tabSpecials: "Apuestas especiales",
     sectionSpecials: "Apuestas especiales del Mundial",

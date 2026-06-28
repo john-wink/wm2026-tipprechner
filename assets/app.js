@@ -1090,7 +1090,9 @@ function renderKnockout() {
   if (!root) return;
   const settings = getSettings();
   const rounds = buildKnockout(settings);
-  const champ = koWinner(koMatchData['KO-F-1'], settings);
+  const live = hasLiveBracket();
+  const finalM = koMatchData['KO-F-1'];
+  const champ = finalM ? koWinner(finalM, settings) : null;
   const champHTML = champ
     ? `<div class="bg-gradient-to-br from-emerald-500/15 to-blue-500/15 border border-emerald-600/50 rounded-lg p-4 mb-4 flex items-center gap-3">
          <span class="text-3xl">🏆</span>
@@ -1100,7 +1102,15 @@ function renderKnockout() {
          </div>
        </div>`
     : '';
-  root.innerHTML = champHTML + renderKoControls(settings) + rounds.map(r => renderKoRound(r, settings)).join('');
+  const controls = live ? renderKoLiveInfo() : renderKoControls(settings);
+  root.innerHTML = champHTML + controls + rounds.map(r => renderKoRound(r, settings)).join('');
+}
+
+// Hinweis-Banner wenn das Bracket aus echten API-Fixtures kommt
+function renderKoLiveInfo() {
+  return `<div class="bg-blue-500/10 border border-blue-600/40 text-[11px] text-zinc-300 rounded-md px-3 py-2 mb-4">
+    ${t('koLiveNote')}
+  </div>`;
 }
 
 function renderKoControls(settings) {
@@ -1466,17 +1476,30 @@ function simulateFullTournament(settings, nSims = 1500) {
 let koMatchData = {};          // id → match-Objekt (ephemer, bei jedem Render neu)
 let koOddsIndex = {};          // pairKey → { home, away, bms, commence } (aus API)
 let resultData = {};           // pairKey → { home, away, hs, as, completed } (echte Ergebnisse, /scores)
+let koFixtures = {};           // pairKey → { home, away, commence, completed, hs, as } (echte K.-o.-Paarungen aus API)
 let koState = { groupOrder: {}, winners: {}, odds: {}, agg: {} }; // persistente Overrides
 
 function isKoId(id) { return typeof id === 'string' && id.indexOf('KO-') === 0; }
 
-// Flagge je Team-Key (GROUPS speichert Flaggen positionsbasiert)
+// Flagge + Gruppe je Team-Key (GROUPS speichert positionsbasiert)
 const FLAG_BY_TEAM = (() => {
   const f = {};
   for (const g of Object.keys(GROUPS)) GROUPS[g].teams.forEach((tk, i) => { f[tk] = GROUPS[g].flags[i]; });
   return f;
 })();
+const GROUP_BY_TEAM = (() => {
+  const m = {};
+  for (const g of Object.keys(GROUPS)) GROUPS[g].teams.forEach(tk => { m[tk] = g; });
+  return m;
+})();
 function teamFlag(k) { return FLAG_BY_TEAM[k] || '⚽'; }
+function groupOf(k) { return GROUP_BY_TEAM[k] || null; }
+// Ein Spiel ist K.-o., wenn die beiden Teams aus VERSCHIEDENEN Gruppen kommen
+// (gruppeninterne Paarungen sind Gruppenspiele). Robust & datumsunabhängig.
+function isKnockoutPairing(a, b) {
+  const ga = groupOf(a), gb = groupOf(b);
+  return !!(ga && gb && ga !== gb);
+}
 
 // Aus Team-Stärke (Outright-Wkt) erwartete Tore ableiten (Fallback ohne Quoten).
 // Outright-Wkt ist eine Turniersieg-Wkt → log-Rating, Differenz auf Tor-Supremacy
@@ -1594,8 +1617,77 @@ function makeKoMatch(id, home, away, round) {
   return m;
 }
 
-// Kompletten Bracket aufbauen → rounds[{ key, matches[] }]; füllt koMatchData
+// K.-o.-Fixtures nach Runde gruppieren (chronologisch, feste Rundengrößen).
+// Die API liefert Fixtures in Spielnummern-Reihenfolge → Chunking ist robust.
+function koFixturesByRound() {
+  const all = Object.values(koFixtures).sort((a, b) =>
+    a.commence < b.commence ? -1 : (a.commence > b.commence ? 1 : 0));
+  const sizes = [['r32', 16], ['r16', 8], ['qf', 4], ['sf', 2], ['third', 1], ['final', 1]];
+  const byRound = { r32: [], r16: [], qf: [], sf: [], third: [], final: [] };
+  let idx = 0;
+  for (const [key, n] of sizes) { byRound[key] = all.slice(idx, idx + n); idx += n; }
+  return byRound;
+}
+function hasLiveBracket() { return koFixturesByRound().r32.length > 0; }
+
+// Kompletten Bracket aufbauen → rounds[{ key, matches[] }]; füllt koMatchData.
+// Bevorzugt ECHTE Paarungen aus der API; fällt sonst aufs Modell zurück.
 function buildKnockout(settings) {
+  koMatchData = {};
+  if (hasLiveBracket()) return buildKnockoutLive(settings);
+  return buildKnockoutModel(settings);
+}
+
+// Bracket aus echten API-Fixtures. Bereits ausgeloste Runden kommen direkt aus der
+// API; noch nicht ausgeloste Runden werden aus den Siegern der Vorrunde prognostiziert.
+function buildKnockoutLive(settings) {
+  const byRound = koFixturesByRound();
+  const rounds = [];
+  const seq = [['r32', 'KO-R32'], ['r16', 'KO-R16'], ['qf', 'KO-QF'], ['sf', 'KO-SF'], ['final', 'KO-F']];
+  let prev = null;
+  for (const [key, prefix] of seq) {
+    let matches = [];
+    if (byRound[key] && byRound[key].length) {
+      matches = byRound[key].map((f, i) => {
+        const m = makeKoMatch(`${prefix}-${i + 1}`, f.home, f.away, key);
+        m.apiCommenceTime = f.commence || m.apiCommenceTime;
+        koMatchData[m.id] = m; return m;
+      });
+    } else if (prev && prev.length) {
+      const w = prev.map(m => koWinner(m, settings));
+      for (let i = 0; i * 2 + 1 < w.length; i++) {
+        const a = w[2 * i], b = w[2 * i + 1];
+        if (!a || !b) continue;
+        const m = makeKoMatch(`${prefix}-${i + 1}`, a, b, key);
+        koMatchData[m.id] = m; matches.push(m);
+      }
+    }
+    rounds.push({ key, matches });
+    if (matches.length) prev = matches;
+  }
+  // Spiel um Platz 3: echtes Fixture oder Verlierer der Halbfinals
+  const sf = (rounds.find(r => r.key === 'sf') || {}).matches || [];
+  let third = [];
+  if (byRound.third && byRound.third.length) {
+    third = byRound.third.map((f, i) => {
+      const m = makeKoMatch(`KO-3P-${i + 1}`, f.home, f.away, 'third');
+      m.apiCommenceTime = f.commence || m.apiCommenceTime;
+      koMatchData[m.id] = m; return m;
+    });
+  } else if (sf.length === 2) {
+    const losers = sf.map(m => { const w = koWinner(m, settings); return w === m.home ? m.away : m.home; });
+    if (losers[0] && losers[1]) {
+      const m = makeKoMatch('KO-3P-1', losers[0], losers[1], 'third');
+      koMatchData[m.id] = m; third = [m];
+    }
+  }
+  if (third.length) rounds.push({ key: 'third', matches: third });
+  return rounds;
+}
+
+// MODELL-Bracket (Fallback ohne Live-Fixtures): Paarungen aus prognostizierten
+// Gruppen-Endständen + FIFA-Slot-Schema.
+function buildKnockoutModel(settings) {
   koMatchData = {};
   const groupResults = {};
   for (const g of Object.keys(GROUPS)) groupResults[g] = koGroupOrder(g, settings);
@@ -1822,6 +1914,11 @@ function applyApiEvents(events) {
     if (bmsHI.length === 0) continue;
     // K.-o.-Index: nach ungeordnetem Team-Paar, da K.-o.-Paarungen dynamisch sind
     koOddsIndex[pairKey(hI, aI)] = { home: hI, away: aI, bms: bmsHI, commence: ev.commence_time };
+    // Echte K.-o.-Paarung (gruppenübergreifend) auch als Fixture merken (für den Baum)
+    if (isKnockoutPairing(hI, aI)) {
+      const k = pairKey(hI, aI);
+      if (!koFixtures[k]) koFixtures[k] = { home: hI, away: aI, commence: ev.commence_time, completed: false, hs: null, as: null };
+    }
     // Gruppenspiel (orientiert auf match.home)
     const match = Object.values(matchData).find(m =>
       (m.home === hI && m.away === aI) || (m.home === aI && m.away === hI));
@@ -1853,25 +1950,34 @@ function findResult(home, away) {
   return (e.home === home) ? { hs: e.hs, as: e.as } : { hs: e.as, as: e.hs };
 }
 
-// /scores-Antwort parsen: abgeschlossene Spiele mit Toren in resultData ablegen
+// /scores-Antwort parsen: echte Ergebnisse in resultData, echte K.-o.-Paarungen
+// (inkl. anstehender) in koFixtures ablegen.
 function applyScoreEvents(events) {
   if (!Array.isArray(events)) return 0;
   let n = 0;
   for (const ev of events) {
-    if (!ev.completed) continue;
     const hI = findInternalTeam(ev.home_team);
     const aI = findInternalTeam(ev.away_team);
-    if (!hI || !aI || !Array.isArray(ev.scores)) continue;
+    if (!hI || !aI) continue;
     let hs = null, as = null;
-    for (const s of ev.scores) {
-      const tk = findInternalTeam(s.name);
-      const val = parseInt(s.score, 10);
-      if (isNaN(val)) continue;
-      if (tk === hI) hs = val; else if (tk === aI) as = val;
+    if (ev.completed && Array.isArray(ev.scores)) {
+      for (const s of ev.scores) {
+        const tk = findInternalTeam(s.name);
+        const val = parseInt(s.score, 10);
+        if (isNaN(val)) continue;
+        if (tk === hI) hs = val; else if (tk === aI) as = val;
+      }
     }
-    if (hs == null || as == null) continue;
-    resultData[pairKey(hI, aI)] = { home: hI, away: aI, hs, as, completed: true, commence: ev.commence_time };
-    n++;
+    const key = pairKey(hI, aI);
+    if (ev.completed && hs != null && as != null) {
+      resultData[key] = { home: hI, away: aI, hs, as, completed: true, commence: ev.commence_time };
+      n++;
+    }
+    // K.-o.-Paarung (gruppenübergreifend) als Fixture merken – auch wenn noch nicht gespielt
+    if (isKnockoutPairing(hI, aI)) {
+      koFixtures[key] = { home: hI, away: aI, commence: ev.commence_time || (koFixtures[key] || {}).commence || null,
+        completed: !!ev.completed, hs, as };
+    }
   }
   return n;
 }
@@ -1950,6 +2056,7 @@ function saveState(silent) {
     koState,
     koOddsIndex,
     resultData,
+    koFixtures,
     settings: {
       ptsExact: document.getElementById('ptsExact').value,
       ptsDiff: document.getElementById('ptsDiff').value,
@@ -1993,6 +2100,7 @@ function loadState() {
     if (state.koState) koState = Object.assign({ groupOrder: {}, winners: {}, odds: {}, agg: {} }, state.koState);
     if (state.koOddsIndex) koOddsIndex = state.koOddsIndex;
     if (state.resultData) resultData = state.resultData;
+    if (state.koFixtures) koFixtures = state.koFixtures;
     clearGroupSimCache();
     if (state.settings) {
       for (const [k, v] of Object.entries(state.settings)) {
@@ -2018,6 +2126,7 @@ function clearAll() {
   koState = { groupOrder: {}, winners: {}, odds: {}, agg: {} };
   koOddsIndex = {};
   resultData = {};
+  koFixtures = {};
   clearGroupSimCache();
   document.getElementById('ptsExact').value = 4;
   document.getElementById('ptsDiff').value = 3;
@@ -2288,6 +2397,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (state.koState) koState = Object.assign({ groupOrder: {}, winners: {}, odds: {}, agg: {} }, state.koState);
       if (state.koOddsIndex) koOddsIndex = state.koOddsIndex;
       if (state.resultData) resultData = state.resultData;
+      if (state.koFixtures) koFixtures = state.koFixtures;
       if (state.settings) for (const [k, v] of Object.entries(state.settings)) {
         if (k === 'apiKey') continue; // sicherheits-kritisch: kommt aus sessionStorage
         const el = document.getElementById(k);
