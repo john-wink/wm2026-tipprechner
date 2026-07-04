@@ -1,16 +1,16 @@
 // Service Worker – Cache-First für Navigation & Assets, Network-Only für API.
 // Robuster gegen einzelne Cache-Failures und URL-Varianten.
 // VERSION und CORE werden von scripts/bump.py synchron mit den HTMLs aktualisiert.
-const VERSION = 'v2026.06.28.1452';
+const VERSION = 'v2026.07.04.1243';
 const CACHE = 'wm2026-' + VERSION;
 
 const CORE = [
   '/',
   '/de/', '/en/', '/fr/', '/es/',
-  '/assets/app.min.js?v=v2026.06.28.1452',
-  '/assets/i18n.min.js?v=v2026.06.28.1452',
-  '/assets/styles.css?v=v2026.06.28.1452',
-  '/assets/tailwind.css?v=v2026.06.28.1452',
+  '/assets/app.min.js?v=v2026.07.04.1243',
+  '/assets/i18n.min.js?v=v2026.07.04.1243',
+  '/assets/styles.css?v=v2026.07.04.1243',
+  '/assets/tailwind.css?v=v2026.07.04.1243',
   '/favicon.svg',
   '/icon-192.svg',
   '/icon-512.svg',

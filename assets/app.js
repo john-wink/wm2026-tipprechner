@@ -215,6 +215,14 @@ function ktPoints(th, ta, ah, aa, rules) {
   if (Math.sign(td) === Math.sign(ad)) return rules.tend;
   return 0;
 }
+// Trefferkategorie eines Tipps (für Farbcodierung, unabhängig von Punktwerten)
+function tipCategory(th, ta, ah, aa) {
+  if (th === ah && ta === aa) return 'exact';
+  const td = th - ta, ad = ah - aa;
+  if (td !== 0 && td === ad) return 'diff';
+  if (Math.sign(td) === Math.sign(ad)) return 'tend';
+  return 'miss';
+}
 function bestKicktippTip(matrix, rules, maxTip) {
   let best = { h: 1, a: 0, ep: -1 };
   for (let th = 0; th <= maxTip; th++) for (let ta = 0; ta <= maxTip; ta++) {
@@ -560,6 +568,114 @@ function probRow(team) {
   </div>`;
 }
 
+// ===== AUSWERTUNG: PROGNOSE VS. ERGEBNIS =====
+// Punkte-Chip: was hätte der empfohlene Tipp mit dem echten Ergebnis geholt?
+function renderPtsChip(tip, res, settings) {
+  const rules = { exact: settings.exact, diff: settings.diff, tend: settings.tend };
+  const pts = ktPoints(tip.h, tip.a, res.hs, res.as, rules);
+  const cat = tipCategory(tip.h, tip.a, res.hs, res.as);
+  const cls = cat === 'exact' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-600/40'
+    : cat === 'diff' ? 'bg-blue-500/15 text-blue-400 border-blue-600/40'
+    : cat === 'tend' ? 'bg-amber-500/15 text-amber-400 border-amber-600/40'
+    : 'bg-zinc-800 text-zinc-500 border-zinc-700';
+  return `<span class="text-[10px] font-mono border rounded px-1 py-0.5 ${cls}" title="${t('evalPtsTitle')}">+${pts} ${t('ptsShort')}</span>`;
+}
+
+// Alle gespielten Spiele mit Ergebnis einsammeln (Gruppe + K.-o.), inkl.
+// eingefrorener Prognose, sofern vorhanden.
+function collectEvalRows(settings) {
+  const rules = { exact: settings.exact, diff: settings.diff, tend: settings.tend };
+  const rows = [];
+  for (const m of Object.values(matchData)) {
+    const res = findResult(m.home, m.away);
+    if (!res) continue;
+    const r = computeMatch(m, settings);
+    const e = resultData[pairKey(m.home, m.away)] || {};
+    rows.push({
+      home: m.home, away: m.away, res, isKO: false,
+      commence: e.commence || m.apiCommenceTime || null,
+      tip: r ? r.bestTip : null,
+      pts: r ? ktPoints(r.bestTip.h, r.bestTip.a, res.hs, res.as, rules) : null,
+      cat: r ? tipCategory(r.bestTip.h, r.bestTip.a, res.hs, res.as) : null
+    });
+  }
+  // K.-o.-Spiele: Prognose zählt nur mit eingefrorenen Buchmacher-Quoten —
+  // der Stärke-Fallback des Modells wäre kein fairer "damaliger Tipp"
+  for (const f of Object.values(koFixtures)) {
+    if (!f.completed || f.hs == null || f.as == null) continue;
+    const bms = findKoOdds(f.home, f.away) || [];
+    let tip = null, pts = null, cat = null;
+    if (bms.length) {
+      const mTmp = { id: `EVAL-${pairKey(f.home, f.away)}`, isKO: true, home: f.home, away: f.away,
+        oddH: null, oddD: null, oddA: null, bookmakerData: bms, aggOverride: null };
+      const r = computeMatch(mTmp, settings);
+      if (r && r.source !== 'model') {
+        tip = r.bestTip;
+        pts = ktPoints(tip.h, tip.a, f.hs, f.as, rules);
+        cat = tipCategory(tip.h, tip.a, f.hs, f.as);
+      }
+    }
+    rows.push({ home: f.home, away: f.away, res: { hs: f.hs, as: f.as }, isKO: true,
+      commence: f.commence || null, tip, pts, cat });
+  }
+  rows.sort((a, b) => (a.commence || '') < (b.commence || '') ? 1 : -1); // neueste zuerst
+  return rows;
+}
+
+let evalExpanded = false;
+function toggleEval() { evalExpanded = !evalExpanded; renderOverview(); }
+
+function renderEvalSection(settings) {
+  const rows = collectEvalRows(settings);
+  if (!rows.length) return '';
+  const scored = rows.filter(x => x.pts != null);
+  const total = scored.reduce((s, x) => s + x.pts, 0);
+  const hits = scored.filter(x => x.cat !== 'miss').length;
+  const avg = scored.length ? (total / scored.length).toFixed(2) : '0.00';
+  const pct = scored.length ? Math.round(100 * hits / scored.length) : 0;
+  const trs = rows.map(x => {
+    const date = x.commence
+      ? new Date(x.commence).toLocaleDateString(window.APP_LANG, { day: '2-digit', month: '2-digit' })
+      : '–';
+    const tipCell = x.tip
+      ? `<span class="font-mono">${x.tip.h}:${x.tip.a}</span>`
+      : `<span class="text-zinc-600" title="${t('evalNoTip')}">–</span>`;
+    const ptsCell = x.pts != null ? renderPtsChip(x.tip, x.res, settings) : '<span class="text-zinc-600">–</span>';
+    return `<tr class="border-b border-zinc-800 last:border-0">
+      <td class="py-1 px-1 text-zinc-500 whitespace-nowrap">${date}</td>
+      <td class="py-1 px-2 text-zinc-200"><span class="mr-1">${teamFlag(x.home)}</span>${teamLabel(x.home)}
+        <span class="text-zinc-500">–</span> <span class="mr-1">${teamFlag(x.away)}</span>${teamLabel(x.away)}</td>
+      <td class="py-1 px-1 text-center">${tipCell}</td>
+      <td class="py-1 px-1 text-center font-mono text-emerald-400">${x.res.hs}:${x.res.as}</td>
+      <td class="py-1 px-1 text-right">${ptsCell}</td>
+    </tr>`;
+  }).join('');
+  const tableHTML = evalExpanded ? `
+    <div class="overflow-x-auto mt-3">
+      <table class="w-full text-xs">
+        <thead><tr class="text-[10px] uppercase text-zinc-500 tracking-wider">
+          <th class="text-left py-1 px-1 font-medium">${t('evalColDate')}</th>
+          <th class="text-left py-1 px-2 font-medium">${t('evalColMatch')}</th>
+          <th class="text-center py-1 px-1 font-medium">${t('evalColTip')}</th>
+          <th class="text-center py-1 px-1 font-medium">${t('evalColResult')}</th>
+          <th class="text-right py-1 px-1 font-medium">${t('evalColPts')}</th>
+        </tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>` : '';
+  return `
+    <section class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 mb-4">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <h3 class="text-base font-semibold text-white">${t('evalTitle')}</h3>
+        <button onclick="toggleEval()" class="text-xs text-zinc-400 hover:text-white px-2 py-1 hover:bg-zinc-800 rounded min-h-[28px]">
+          ${evalExpanded ? t('evalHide') : t('evalShow')} ${evalExpanded ? '⌃' : '⌄'}
+        </button>
+      </div>
+      <p class="text-[11px] text-zinc-500 mt-1">${t('evalSummary', { n: scored.length, pts: total, avg, pct })}</p>
+      ${tableHTML}
+    </section>`;
+}
+
 // ===== TABS =====
 function switchTab(tab) {
   document.querySelectorAll('[data-tab]').forEach(b => {
@@ -645,6 +761,14 @@ function renderOverview() {
 
   const list = document.getElementById('matchList');
   if (!list) return;
+  // Auswertungs-Sektion (Prognose vs. Ergebnis) dynamisch vor der Liste einhängen
+  let evalDiv = document.getElementById('evalSection');
+  if (!evalDiv) {
+    evalDiv = document.createElement('div');
+    evalDiv.id = 'evalSection';
+    list.parentNode.insertBefore(evalDiv, list);
+  }
+  evalDiv.innerHTML = renderEvalSection(settings);
   if (items.length === 0) {
     list.innerHTML = `<div class="text-center py-12 text-zinc-500 text-sm">${t('noFilterResults')}</div>`;
     return;
@@ -658,6 +782,15 @@ function renderMatchCard(m, r, settings, opts = {}) {
   const date = m.apiCommenceTime
     ? new Date(m.apiCommenceTime).toLocaleDateString(window.APP_LANG, { day:'2-digit', month:'2-digit', weekday:'short' })
     : '–';
+  // Gespieltes Spiel: echtes Ergebnis + Punkte, die der Tipp geholt hätte.
+  // K.-o.-Karten zeigen ihr Ergebnis bereits in der Aufsteiger-Zeile (renderKoMatch).
+  const res = m.isKO ? null : findResult(m.home, m.away);
+  const resBadgeHTML = res
+    ? `<div class="flex items-center gap-1 justify-end mb-1">
+         <span class="text-[10px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-600/40 rounded px-1 py-0.5" title="${t('koRealResult')}">✓ ${res.hs}:${res.as}</span>
+         ${r ? renderPtsChip(r.bestTip, res, settings) : ''}
+       </div>`
+    : '';
   const tipHTML = r
     ? `<div class="font-mono font-semibold text-emerald-400 text-base sm:text-lg tip-reveal">${r.bestTip.h}:${r.bestTip.a}</div>
        <div class="text-xs text-zinc-500 font-mono">EV ${r.bestTip.ep.toFixed(2)}</div>`
@@ -687,6 +820,7 @@ function renderMatchCard(m, r, settings, opts = {}) {
             <div class="text-[11px] text-zinc-500 mt-1.5 truncate">${source}</div>
           </div>
           <div class="text-right flex-shrink-0">
+            ${resBadgeHTML}
             ${tipHTML}
           </div>
           <div class="text-zinc-500 transition-transform ${isExpanded ? 'rotate-180' : ''} flex-shrink-0">⌄</div>
@@ -885,6 +1019,9 @@ function computeOverallForecast(settings) {
   let totalMatchesWithTip = 0;
   let totalVariance = 0;
   for (const m of Object.values(matchData)) {
+    // Gespielte Spiele sind keine Zukunftsprognose mehr — ihre Punkte stehen
+    // fest (siehe Auswertung); eingefrorene Quoten dürfen hier nicht einfließen
+    if (findResult(m.home, m.away)) continue;
     const r = computeMatch(m, settings);
     if (!r) continue;
     totalMatchesWithTip++;
@@ -1027,6 +1164,16 @@ function computeStandings(g, settings) {
   const st = teams.map((t, i) => ({ team: t, flag: flags[i], idx: i, pts: 0, gf: 0, ga: 0 }));
   const matches = Object.values(matchData).filter(m => m.group === g);
   for (const m of matches) {
+    // Gespielte Partien zählen mit ECHTEM Ergebnis (3/1/0), offene mit dem Modell
+    const res = findResult(m.home, m.away);
+    if (res) {
+      st[m.homeIdx].gf += res.hs; st[m.homeIdx].ga += res.as;
+      st[m.awayIdx].gf += res.as; st[m.awayIdx].ga += res.hs;
+      if (res.hs > res.as) st[m.homeIdx].pts += 3;
+      else if (res.hs < res.as) st[m.awayIdx].pts += 3;
+      else { st[m.homeIdx].pts++; st[m.awayIdx].pts++; }
+      continue;
+    }
     const r = computeMatch(m, settings);
     if (!r) continue;
     st[m.homeIdx].pts += 3 * r.probs.pH + r.probs.pD;
@@ -1042,7 +1189,7 @@ function computeStandings(g, settings) {
 function renderGroupCard(g, settings) {
   const st = computeStandings(g, settings);
   const haveData = Object.values(matchData).filter(m => m.group === g)
-    .some(m => computeMatch(m, settings) !== null);
+    .some(m => findResult(m.home, m.away) || computeMatch(m, settings) !== null);
   const stRows = st.map((s, i) => {
     const indicator = i === 0 ? 'text-emerald-400' : i === 1 ? 'text-blue-400' : i === 2 ? 'text-amber-400' : 'text-zinc-600';
     return `<tr class="border-b border-zinc-800 last:border-0">
@@ -1103,7 +1250,8 @@ function renderKnockout() {
        </div>`
     : '';
   const controls = live ? renderKoLiveInfo() : renderKoControls(settings);
-  root.innerHTML = champHTML + controls + rounds.map(r => renderKoRound(r, settings)).join('');
+  root.innerHTML = champHTML + controls +
+    rounds.filter(r => r.matches.length).map(r => renderKoRound(r, settings)).join('');
 }
 
 // Hinweis-Banner wenn das Bracket aus echten API-Fixtures kommt
@@ -1151,8 +1299,10 @@ function renderKoMatch(m, settings) {
   const card = renderMatchCard(m, r, settings, { compact: true });
   const w = koWinner(m, settings);
   const overridden = !!koState.winners[m.id];
-  const res = findResult(m.home, m.away);
-  const decided = res && res.hs !== res.as; // echtes Ergebnis bestimmt den Aufsteiger
+  const res = findResult(m.home, m.away, true);
+  // Echtes Ergebnis bestimmt den Aufsteiger — bei 1:1 nach 90 Min. (n.V./i.E.)
+  // zählt der aus den Folgerunden-Fixtures abgelesene Aufsteiger
+  const decided = !!(res && (res.hs !== res.as || advancerFromFixtures(m.home, m.away)));
   const btn = (team, flag) => {
     const active = w === team;
     const cls = active
@@ -1224,17 +1374,20 @@ function sampleScore(matrix) {
 // Monte-Carlo: Wer wird Gruppensieger? Liefert für jedes der 4 Teams die Wkt.
 function simulateGroupWinners(g, settings, nSims = 10000) {
   // Cache
-  const cacheKey = `${g}|${activeAggMethod({ aggOverride: null })}|${settings.exact}|${settings.diff}|${settings.tend}|${settings.maxGoals}`;
+  const cacheKey = `${g}|${activeAggMethod({ aggOverride: null })}|${settings.exact}|${settings.diff}|${settings.tend}|${settings.maxGoals}|${Object.keys(resultData).length}`;
   if (groupSimCache[cacheKey]) return groupSimCache[cacheKey];
 
   const teams = GROUPS[g].teams;
   const matches = Object.values(matchData).filter(m => m.group === g);
-  // Pre-compute Score-Matrizen aller Spiele
+  // Gespielte Spiele gehen mit ECHTEM Ergebnis fix in jede Simulation ein,
+  // nur offene Spiele werden aus der Score-Matrix gesampelt
   const matchInfos = matches.map(m => {
+    const res = findResult(m.home, m.away);
+    if (res) return { homeIdx: m.homeIdx, awayIdx: m.awayIdx, fixed: [res.hs, res.as] };
     const r = computeMatch(m, settings);
     return r ? { homeIdx: m.homeIdx, awayIdx: m.awayIdx, matrix: r.matrix } : null;
   });
-  // Wenn ein Spiel keine Daten hat, abbrechen
+  // Wenn ein offenes Spiel keine Daten hat, abbrechen
   if (matchInfos.some(mi => !mi)) {
     groupSimCache[cacheKey] = null;
     return null;
@@ -1251,7 +1404,7 @@ function simulateGroupWinners(g, settings, nSims = 10000) {
       { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: rand() }
     ];
     for (const mi of matchInfos) {
-      const [hg, ag] = sampleScore(mi.matrix);
+      const [hg, ag] = mi.fixed || sampleScore(mi.matrix);
       st[mi.homeIdx].gf += hg; st[mi.homeIdx].ga += ag;
       st[mi.awayIdx].gf += ag; st[mi.awayIdx].ga += hg;
       if (hg > ag) st[mi.homeIdx].pts += 3;
@@ -1300,21 +1453,27 @@ function getTeamStrength() {
 
 function simulateGroupOncePlace(g, settings, matrixCache) {
   const matches = Object.values(matchData).filter(m => m.group === g);
-  const infos = matches.map(m => matrixCache[m.id]);
-  if (infos.some(mi => !mi)) return null;
   const st = [
     { idx: 0, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
     { idx: 1, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
     { idx: 2, pts: 0, gf: 0, ga: 0, tiebreak: rand() },
     { idx: 3, pts: 0, gf: 0, ga: 0, tiebreak: rand() }
   ];
-  for (const mi of infos) {
-    const [hg, ag] = sampleScore(mi.matrix);
-    st[mi.homeIdx].gf += hg; st[mi.homeIdx].ga += ag;
-    st[mi.awayIdx].gf += ag; st[mi.awayIdx].ga += hg;
-    if (hg > ag) st[mi.homeIdx].pts += 3;
-    else if (hg < ag) st[mi.awayIdx].pts += 3;
-    else { st[mi.homeIdx].pts++; st[mi.awayIdx].pts++; }
+  for (const m of matches) {
+    // Gespielte Spiele fix mit echtem Ergebnis; offene aus der Matrix sampeln
+    const res = findResult(m.home, m.away);
+    let hg, ag;
+    if (res) { hg = res.hs; ag = res.as; }
+    else {
+      const mi = matrixCache[m.id];
+      if (!mi) return null;
+      [hg, ag] = sampleScore(mi.matrix);
+    }
+    st[m.homeIdx].gf += hg; st[m.homeIdx].ga += ag;
+    st[m.awayIdx].gf += ag; st[m.awayIdx].ga += hg;
+    if (hg > ag) st[m.homeIdx].pts += 3;
+    else if (hg < ag) st[m.awayIdx].pts += 3;
+    else { st[m.homeIdx].pts++; st[m.awayIdx].pts++; }
   }
   st.sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || a.tiebreak - b.tiebreak);
   return st.map(s => ({
@@ -1587,10 +1746,15 @@ function buildBracketUnique(groupResults, best3) {
   return FIFA_2026_R32.map(([a, b]) => [lookup(a), lookup(b)]);
 }
 
-// Aufsteiger eines K.-o.-Spiels: echtes Ergebnis > Override > Favorit > Stärke
+// Aufsteiger eines K.-o.-Spiels: echtes Ergebnis > Folgerunden-Fixture (bei
+// Entscheidung n.V./i.E.) > Override > Favorit > Stärke
 function koWinner(m, settings) {
-  const res = findResult(m.home, m.away);
+  const res = findResult(m.home, m.away, true);
   if (res && res.hs !== res.as) return res.hs > res.as ? m.home : m.away;
+  if (res) {
+    const adv = advancerFromFixtures(m.home, m.away);
+    if (adv) return adv;
+  }
   const ov = koState.winners[m.id];
   if (ov && (ov === m.home || ov === m.away)) return ov;
   const r = computeMatch(m, settings);
@@ -1617,18 +1781,159 @@ function makeKoMatch(id, home, away, round) {
   return m;
 }
 
-// K.-o.-Fixtures nach Runde gruppieren (chronologisch, feste Rundengrößen).
-// Die API liefert Fixtures in Spielnummern-Reihenfolge → Chunking ist robust.
+// Offizielle Datumsfenster der K.-o.-Runden (WM-2026-Spielplan, seit Final Draw
+// fix). Grenzen liegen in spielfreien Zeiträumen (UTC), sodass jeder Anstoß
+// eindeutig einer Runde zuordenbar ist. ISO-Strings der API ("...Z") sind
+// lexikographisch vergleichbar — kein Date-Parsing nötig.
+const KO_STAGE_START = '2026-06-28T06:00:00Z'; // zwischen letztem Gruppenspiel und erstem R32-Anstoß
+const KO_ROUND_WINDOWS = [
+  ['r32',   KO_STAGE_START,         '2026-07-04T12:00:00Z'],
+  ['r16',   '2026-07-04T12:00:00Z', '2026-07-08T12:00:00Z'],
+  ['qf',    '2026-07-08T12:00:00Z', '2026-07-12T12:00:00Z'],
+  ['sf',    '2026-07-12T12:00:00Z', '2026-07-16T12:00:00Z'],
+  ['third', '2026-07-16T12:00:00Z', '2026-07-19T06:00:00Z'],
+  ['final', '2026-07-19T06:00:00Z', '2026-07-22T00:00:00Z']
+];
+function roundOfCommence(c) {
+  if (!c) return null;
+  const w = KO_ROUND_WINDOWS.find(([, from, to]) => c >= from && c < to);
+  return w ? w[0] : null;
+}
+
+// K.-o.-Fixtures nach Runde gruppieren — anhand der Datumsfenster. Ein starres
+// Chunking nach Anstoßzeit (erste 16 = R32, …) scheitert, weil /scores nur
+// ±3 Tage liefert: Wer nicht täglich lädt, hat Lücken in koFixtures, und die
+// Folgerunden verrutschen (falsche Paarungen in falschen Runden).
 function koFixturesByRound() {
-  const all = Object.values(koFixtures).sort((a, b) =>
-    a.commence < b.commence ? -1 : (a.commence > b.commence ? 1 : 0));
-  const sizes = [['r32', 16], ['r16', 8], ['qf', 4], ['sf', 2], ['third', 1], ['final', 1]];
   const byRound = { r32: [], r16: [], qf: [], sf: [], third: [], final: [] };
-  let idx = 0;
-  for (const [key, n] of sizes) { byRound[key] = all.slice(idx, idx + n); idx += n; }
+  for (const f of Object.values(koFixtures)) {
+    const r = roundOfCommence(f.commence);
+    if (r) byRound[r].push(f);
+  }
+  for (const k of Object.keys(byRound))
+    byRound[k].sort((a, b) => a.commence < b.commence ? -1 : (a.commence > b.commence ? 1 : 0));
   return byRound;
 }
-function hasLiveBracket() { return koFixturesByRound().r32.length > 0; }
+function hasLiveBracket() {
+  const br = koFixturesByRound();
+  return Object.keys(br).some(k => br[k].length > 0);
+}
+
+// ===== STATISCHES ERGEBNIS-BACKFILL =====
+// Die /scores-API liefert nur ±3 Tage — ältere Ergebnisse sind für Nutzer, die
+// nicht täglich geladen haben, unwiederbringlich weg. Deshalb sind hier die
+// Endergebnisse fest eingebettet (Web-Recherche, je ≥2 unabhängige Quellen).
+// Format: [AnstoßISO, Heim, Gast, ToreHeim, ToreGast] mit internen Team-Keys.
+// API-/Live-Daten haben stets Vorrang: applyStaticResults() füllt nur Lücken.
+const STATIC_RESULTS = [
+  ['2026-06-11',       'Mexiko',           'Suedafrika',       2, 0],
+  ['2026-06-11',       'Suedkorea',        'Tschechien',       2, 1],
+  ['2026-06-12',       'Kanada',           'Bosnien',          1, 1],
+  ['2026-06-12',       'USA',              'Paraguay',         4, 1],
+  ['2026-06-13',       'Katar',            'Schweiz',          1, 1],
+  ['2026-06-13',       'Brasilien',        'Marokko',          1, 1],
+  ['2026-06-13',       'Haiti',            'Schottland',       0, 1],
+  ['2026-06-13',       'Australien',       'Tuerkei',          2, 0],
+  ['2026-06-14',       'Deutschland',      'Curacao',          7, 1],
+  ['2026-06-14',       'Elfenbeinkueste',  'Ecuador',          1, 0],
+  ['2026-06-14',       'Niederlande',      'Japan',            2, 2],
+  ['2026-06-14',       'Schweden',         'Tunesien',         5, 1],
+  ['2026-06-15',       'Belgien',          'Aegypten',         1, 1],
+  ['2026-06-15',       'Iran',             'Neuseeland',       2, 2],
+  ['2026-06-15',       'Spanien',          'KapVerde',         0, 0],
+  ['2026-06-15',       'SaudiArabien',     'Uruguay',          1, 1],
+  ['2026-06-16',       'Frankreich',       'Senegal',          3, 1],
+  ['2026-06-16',       'Irak',             'Norwegen',         1, 4],
+  ['2026-06-16',       'Argentinien',      'Algerien',         3, 0],
+  ['2026-06-16',       'Oesterreich',      'Jordanien',        3, 1],
+  ['2026-06-17',       'Portugal',         'DRKongo',          1, 1],
+  ['2026-06-17',       'Usbekistan',       'Kolumbien',        1, 3],
+  ['2026-06-17',       'England',          'Kroatien',         4, 2],
+  ['2026-06-17',       'Ghana',            'Panama',           1, 0],
+  ['2026-06-18',       'Tschechien',       'Suedafrika',       1, 1],
+  ['2026-06-18',       'Mexiko',           'Suedkorea',        1, 0],
+  ['2026-06-18',       'Schweiz',          'Bosnien',          4, 1],
+  ['2026-06-18',       'Kanada',           'Katar',            6, 0],
+  ['2026-06-19',       'Schottland',       'Marokko',          0, 1],
+  ['2026-06-19',       'Brasilien',        'Haiti',            3, 0],
+  ['2026-06-19',       'USA',              'Australien',       2, 0],
+  ['2026-06-19',       'Tuerkei',          'Paraguay',         0, 1],
+  ['2026-06-20',       'Deutschland',      'Elfenbeinkueste',  2, 1],
+  ['2026-06-20',       'Ecuador',          'Curacao',          0, 0],
+  ['2026-06-20',       'Niederlande',      'Schweden',         5, 1],
+  ['2026-06-20',       'Tunesien',         'Japan',            0, 4],
+  ['2026-06-21',       'Belgien',          'Iran',             0, 0],
+  ['2026-06-21',       'Neuseeland',       'Aegypten',         1, 3],
+  ['2026-06-21',       'Spanien',          'SaudiArabien',     4, 0],
+  ['2026-06-21',       'Uruguay',          'KapVerde',         2, 2],
+  ['2026-06-22',       'Frankreich',       'Irak',             3, 0],
+  ['2026-06-22',       'Norwegen',         'Senegal',          3, 2],
+  ['2026-06-22',       'Argentinien',      'Oesterreich',      2, 0],
+  ['2026-06-22',       'Jordanien',        'Algerien',         1, 2],
+  ['2026-06-23',       'Portugal',         'Usbekistan',       5, 0],
+  ['2026-06-23',       'Kolumbien',        'DRKongo',          1, 0],
+  ['2026-06-23',       'England',          'Ghana',            0, 0],
+  ['2026-06-23',       'Panama',           'Kroatien',         0, 1],
+  ['2026-06-24',       'Tschechien',       'Mexiko',           0, 3],
+  ['2026-06-24',       'Suedafrika',       'Suedkorea',        1, 0],
+  ['2026-06-24',       'Schweiz',          'Kanada',           2, 1],
+  ['2026-06-24',       'Bosnien',          'Katar',            3, 1],
+  ['2026-06-24',       'Marokko',          'Haiti',            4, 2],
+  ['2026-06-24',       'Schottland',       'Brasilien',        0, 3],
+  ['2026-06-25',       'Tuerkei',          'USA',              3, 2],
+  ['2026-06-25',       'Paraguay',         'Australien',       0, 0],
+  ['2026-06-25',       'Curacao',          'Elfenbeinkueste',  0, 2],
+  ['2026-06-25',       'Ecuador',          'Deutschland',      2, 1],
+  ['2026-06-25',       'Japan',            'Schweden',         1, 1],
+  ['2026-06-25',       'Tunesien',         'Niederlande',      1, 3],
+  ['2026-06-26',       'Aegypten',         'Iran',             1, 1],
+  ['2026-06-26',       'Neuseeland',       'Belgien',          1, 5],
+  ['2026-06-26',       'KapVerde',         'SaudiArabien',     0, 0],
+  ['2026-06-26',       'Uruguay',          'Spanien',          0, 1],
+  ['2026-06-26',       'Norwegen',         'Frankreich',       1, 4],
+  ['2026-06-26',       'Senegal',          'Irak',             5, 0],
+  ['2026-06-27',       'Algerien',         'Oesterreich',      3, 3],
+  ['2026-06-27',       'Jordanien',        'Argentinien',      1, 3],
+  ['2026-06-27',       'Kolumbien',        'Portugal',         0, 0],
+  ['2026-06-27',       'DRKongo',          'Usbekistan',       3, 1],
+  ['2026-06-27',       'Panama',           'England',          0, 2],
+  ['2026-06-27',       'Kroatien',         'Ghana',            2, 1],
+  ['2026-06-28',       'Suedafrika',       'Kanada',           0, 1],
+  ['2026-06-29',       'Brasilien',        'Japan',            2, 1],
+  ['2026-06-29',       'Deutschland',      'Paraguay',         1, 1, 'Paraguay'], // 1:1 n.V., 3:4 i.E.
+  ['2026-06-29',       'Niederlande',      'Marokko',          1, 1, 'Marokko'],  // 1:1 n.V., 2:3 i.E.
+  ['2026-06-30',       'Elfenbeinkueste',  'Norwegen',         1, 2],
+  ['2026-06-30',       'Frankreich',       'Schweden',         3, 0],
+  ['2026-06-30',       'Mexiko',           'Ecuador',          2, 0],
+];
+
+function applyStaticResults() {
+  let n = 0;
+  for (const entry of STATIC_RESULTS) {
+    const [date, h, a, hs, as, adv] = entry; // adv: Aufsteiger bei 1:1 n.V./i.E.
+    if (!groupOf(h) || !groupOf(a)) continue; // unbekannter Team-Key → ignorieren
+    // Datums-Kurzform normalisieren (18:00Z liegt sicher im jeweiligen Rundenfenster)
+    const commence = date.length === 10 ? date + 'T18:00:00Z' : date;
+    const key = pairKey(h, a);
+    const koGame = isKnockoutPairing(h, a) || commence >= KO_STAGE_START;
+    const rKey = (koGame && !isKnockoutPairing(h, a)) ? key + '|ko' : key;
+    const ex = resultData[rKey];
+    // Nur Lücken füllen; eigene (statische) Einträge älterer App-Versionen auffrischen
+    if (!ex || ex.static) {
+      resultData[rKey] = { home: h, away: a, hs, as, completed: true, commence, static: true };
+      n++;
+    }
+    if (koGame) {
+      const exF = koFixtures[key];
+      // Auch unfertige Fixture-Stubs (z. B. aus altem Quoten-Feed in localStorage,
+      // completed=false) mit dem statischen Endergebnis vervollständigen
+      if (!exF || exF.static || !exF.completed) {
+        koFixtures[key] = { home: h, away: a, commence, completed: true, hs, as, static: true, adv: adv || null };
+      }
+    }
+  }
+  return n;
+}
 
 // Kompletten Bracket aufbauen → rounds[{ key, matches[] }]; füllt koMatchData.
 // Bevorzugt ECHTE Paarungen aus der API; fällt sonst aufs Modell zurück.
@@ -1888,8 +2193,10 @@ function applyOutrightEvents(events) {
   return teams.length;
 }
 function applyApiEvents(events) {
-  for (const m of Object.values(matchData)) m.bookmakerData = [];
-  koOddsIndex = {}; // K.-o.-Quoten neu aufbauen (siehe findKoOdds)
+  // Bewusst KEIN pauschales Zurücksetzen von bookmakerData/koOddsIndex:
+  // Gespielte Spiele fallen aus dem API-Feed — ihre letzten Quoten bleiben als
+  // "eingefrorene Prognose" stehen (Basis für den Prognose-Ergebnis-Vergleich).
+  // Spiele im Feed werden unten pro Event vollständig überschrieben.
   let matched = 0, totalBM = 0;
   for (const ev of events) {
     const hI = findInternalTeam(ev.home_team);
@@ -1914,19 +2221,24 @@ function applyApiEvents(events) {
     if (bmsHI.length === 0) continue;
     // K.-o.-Index: nach ungeordnetem Team-Paar, da K.-o.-Paarungen dynamisch sind
     koOddsIndex[pairKey(hI, aI)] = { home: hI, away: aI, bms: bmsHI, commence: ev.commence_time };
-    // Echte K.-o.-Paarung (gruppenübergreifend) auch als Fixture merken (für den Baum)
-    if (isKnockoutPairing(hI, aI)) {
+    // Echte K.-o.-Paarung auch als Fixture merken (für den Baum) — per Gruppen-
+    // zugehörigkeit ODER Anstoß in der K.-o.-Phase (Rematch von Gruppengegnern)
+    const koGame = isKnockoutPairing(hI, aI) || (ev.commence_time && ev.commence_time >= KO_STAGE_START);
+    if (koGame) {
       const k = pairKey(hI, aI);
       if (!koFixtures[k]) koFixtures[k] = { home: hI, away: aI, commence: ev.commence_time, completed: false, hs: null, as: null };
     }
-    // Gruppenspiel (orientiert auf match.home)
-    const match = Object.values(matchData).find(m =>
+    // Gruppenspiel (orientiert auf match.home) — nicht bei K.-o.-Rematch, sonst
+    // bekäme die Gruppenspiel-Karte die Quoten des K.-o.-Spiels
+    const match = koGame ? null : Object.values(matchData).find(m =>
       (m.home === hI && m.away === aI) || (m.home === aI && m.away === hI));
     if (match) {
       match.bookmakerData = (match.home !== hI) ? bmsHI.map(flipBm) : bmsHI;
       match.apiCommenceTime = ev.commence_time;
-      matched++; totalBM += bmsHI.length;
     }
+    // Status zählt Gruppen- UND K.-o.-Spiele mit Quoten — in der K.-o.-Phase
+    // gibt es keine Gruppenspiele mehr, "0 Spiele geladen" wäre irreführend
+    matched++; totalBM += bmsHI.length;
   }
   return { matched, bookmakers: totalBM };
 }
@@ -1943,11 +2255,40 @@ function findKoOdds(home, away) {
   return (e.home === home) ? e.bms.slice() : e.bms.map(flipBm);
 }
 
-// Echtes Ergebnis einer Paarung holen, orientiert auf (home, away)
-function findResult(home, away) {
-  const e = resultData[pairKey(home, away)];
+// Echtes Ergebnis einer Paarung holen, orientiert auf (home, away).
+// ko=true: K.-o.-Sicht. Bei gruppeninternen Paarungen liegt ein K.-o.-Rematch
+// (z. B. Finale zweier Gruppengegner) unter einem separaten Key, damit es das
+// Gruppenergebnis für die Tabellenberechnung nicht überschreibt — und umgekehrt
+// das Gruppenergebnis nicht als K.-o.-Resultat missverstanden wird.
+function findResult(home, away, ko) {
+  const key = pairKey(home, away);
+  const e = (ko && !isKnockoutPairing(home, away)) ? resultData[key + '|ko'] : resultData[key];
   if (!e) return null;
   return (e.home === home) ? { hs: e.hs, as: e.as } : { hs: e.as, as: e.hs };
+}
+
+// Aufsteiger einer beendeten, aber nach 90 Min. unentschiedenen K.-o.-Partie
+// (Verlängerung/Elfmeterschießen — /scores meldet nur den 90-Minuten-Stand):
+// Wer in einem echten Fixture der FOLGERUNDE wieder auftaucht, ist weiter.
+// Wichtig: nur die direkte Folgerunde prüfen — nach einem Halbfinale spielt
+// auch der Verlierer nochmal (Spiel um Platz 3), nur der Sieger im Finale.
+const KO_NEXT_ROUND = { r32: 'r16', r16: 'qf', qf: 'sf', sf: 'final' };
+function advancerFromFixtures(home, away) {
+  const cur = koFixtures[pairKey(home, away)];
+  if (!cur) return null;
+  // Statisch hinterlegter Aufsteiger (Elfmeter-Fälle im Backfill) hat Vorrang —
+  // funktioniert auch ohne geladene Folgerunden-Fixtures
+  if (cur.adv === home || cur.adv === away) return cur.adv;
+  const nextKey = KO_NEXT_ROUND[roundOfCommence(cur.commence)];
+  if (!nextKey) return null;
+  const [, from, to] = KO_ROUND_WINDOWS.find(w => w[0] === nextKey);
+  for (const f of Object.values(koFixtures)) {
+    if (!f.commence || f.commence < from || f.commence >= to) continue;
+    const hasHome = f.home === home || f.away === home;
+    const hasAway = f.home === away || f.away === away;
+    if (hasHome !== hasAway) return hasHome ? home : away;
+  }
+  return null;
 }
 
 // /scores-Antwort parsen: echte Ergebnisse in resultData, echte K.-o.-Paarungen
@@ -1969,12 +2310,16 @@ function applyScoreEvents(events) {
       }
     }
     const key = pairKey(hI, aI);
+    // K.-o.-Spiel: Teams aus verschiedenen Gruppen ODER Anstoß in der K.-o.-Phase
+    // (deckt auch ein Rematch zweier Gruppengegner ab, z. B. im Finale)
+    const koGame = isKnockoutPairing(hI, aI) || (ev.commence_time && ev.commence_time >= KO_STAGE_START);
     if (ev.completed && hs != null && as != null) {
-      resultData[key] = { home: hI, away: aI, hs, as, completed: true, commence: ev.commence_time };
+      const rKey = (koGame && !isKnockoutPairing(hI, aI)) ? key + '|ko' : key;
+      resultData[rKey] = { home: hI, away: aI, hs, as, completed: true, commence: ev.commence_time };
       n++;
     }
-    // K.-o.-Paarung (gruppenübergreifend) als Fixture merken – auch wenn noch nicht gespielt
-    if (isKnockoutPairing(hI, aI)) {
+    // K.-o.-Paarung als Fixture merken – auch wenn noch nicht gespielt
+    if (koGame) {
       koFixtures[key] = { home: hI, away: aI, commence: ev.commence_time || (koFixtures[key] || {}).commence || null,
         completed: !!ev.completed, hs, as };
     }
@@ -2114,6 +2459,7 @@ function loadState() {
     const apiEl = document.getElementById('apiKey');
     if (apiEl) apiEl.value = loadApiKey();
     updateApiStatusFromKey();
+    applyStaticResults(); // Backfill nach dem Laden — geladene Daten haben Vorrang
     renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
     toast(t('toastLoaded'));
   } catch (e) { toast(t('toastLoadFail', { msg: e.message }), true); }
@@ -2139,6 +2485,7 @@ function clearAll() {
   try { sessionStorage.removeItem(SESSION_API_KEY); } catch (e) {}
   expandedId = null;
   setApiStatus('', t('apiStatusEmpty'));
+  applyStaticResults(); // statische Ergebnisse bleiben auch nach Reset verfügbar
   renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
   toast(t('toastReset'));
 }
@@ -2410,6 +2757,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const apiEl = document.getElementById('apiKey');
   if (apiEl) apiEl.value = loadApiKey();
   updateApiStatusFromKey();
+  applyStaticResults(); // Backfill NACH dem Laden — lokale/API-Daten haben Vorrang
   renderOverview(); renderGroups(); renderKnockout(); renderSpecials();
 
   // Service Worker registrieren (PWA)

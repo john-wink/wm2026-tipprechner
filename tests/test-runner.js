@@ -46,7 +46,12 @@ function loadApp() {
     'computeMatch','simulateGroupWinners','simulateFullTournament',
     'simulateGroupOncePlace','simulateKnockout','sampleScore',
     'applyOutrightEvents','applyApiEvents',
-    'FIFA_2026_R32','FIFA_2026_R16_PAIRS','buildBracket'
+    'FIFA_2026_R32','FIFA_2026_R16_PAIRS','buildBracket',
+    'applyScoreEvents','koFixturesByRound','hasLiveBracket','koFixtures','resultData',
+    'findResult','advancerFromFixtures','koWinner','isKnockoutPairing','pairKey',
+    'KO_ROUND_WINDOWS','KO_STAGE_START',
+    'applyStaticResults','STATIC_RESULTS','collectEvalRows','tipCategory','findKoOdds','koOddsIndex',
+    'computeOverallForecast'
   ];
   const exportExpr = exportList.map(n => `${n}: typeof ${n}!=='undefined' ? ${n} : undefined`).join(',\n');
   const fn = new Function(
